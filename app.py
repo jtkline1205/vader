@@ -120,7 +120,16 @@ def chip_exchange_filename():
 
 
 @app.route('/doubles', methods=['GET'])
-def denomination_value():
+def denomination_value_route():
+    try:
+        denomination_name = str(request.args.get('name'))
+        resource_name = denomination_value(denomination_name)
+        return jsonify({"value": resource_name})
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid denomination name"}), 400
+
+
+def denomination_value(denom):
     resource_name_map = {
         "ZERO": ZERO,
         "ONE": ONE,
@@ -132,12 +141,7 @@ def denomination_value():
         "FIFTY": FIFTY,
         "HUNDRED": HUNDRED
     }
-    try:
-        denomination_name = str(request.args.get('name'))
-        resource_name = resource_name_map[denomination_name]
-        return jsonify({"value": resource_name})
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid denomination name"}), 400
+    return resource_name_map[denom]
 
 
 if __name__ == '__main__':
