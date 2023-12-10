@@ -51,7 +51,7 @@ class BillStack:
         combination = self._find_bill_combination(total, bill_list)
 
         if combination is None:
-            return BillStack()
+            return None
         else:
             stack = BillStack()
             for bill in combination:

@@ -228,12 +228,16 @@ def get_bill_value():
 def covers_bill_value():
     try:
         bill_value_param = float(request.args.get('billValue'))
+        print("covers bill value param = " + str(bill_value_param))
         data = request.get_json()
         bill_stack = BillStack(data['playerBills'])
-        bill_stack.find_bill_combination(bill_value_param)
-        if bill_stack:
+        print("bill_stack = " + str(bill_stack))
+        found_stack = bill_stack.find_bill_combination(bill_value_param)
+        if found_stack:
+            print("covering bill stack is " + str(found_stack.bill_frequencies))
             return jsonify(True)
         else:
+            print("could not cover the bill value")
             return jsonify(False)
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting bill value"}), 400
