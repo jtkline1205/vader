@@ -1,6 +1,13 @@
 from flask import Flask, jsonify, request
+from bill_stack import BillStack
+import logging
 
 app = Flask(__name__)
+
+# Disable logging for 200 responses
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
 ZERO = 0.0
 ONE = 1.0
 TWO_FIFTY = 2.50
@@ -123,25 +130,113 @@ def chip_exchange_filename():
 def denomination_value_route():
     try:
         denomination_name = str(request.args.get('name'))
-        resource_name = denomination_value(denomination_name)
+        resource_name = BillStack.denomination_value(denomination_name)
         return jsonify({"value": resource_name})
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid denomination name"}), 400
 
 
-def denomination_value(denom):
-    resource_name_map = {
-        "ZERO": ZERO,
-        "ONE": ONE,
-        "TWO_FIFTY": TWO_FIFTY,
-        "FIVE": FIVE,
-        "TEN": TEN,
-        "TWENTY": TWENTY,
-        "TWENTY_FIVE": TWENTY_FIVE,
-        "FIFTY": FIFTY,
-        "HUNDRED": HUNDRED
-    }
-    return resource_name_map[denom]
+@app.route('/saveState/billValueAdd', methods=['PUT'])
+def add_bill_value():
+    try:
+        double_param = float(request.args.get('double'))
+        data = request.get_json()
+        required_keys = ['playerBankAccountBalance', 'playerFullness', 'playerFeeling']
+        for key in required_keys:
+            if key not in data:
+                return jsonify({'error': f'Missing required key: {key}'}), 400
+        bill_stack = BillStack(data['playerBills'])
+        new_stack = BillStack.generate_stack_from_total(double_param)
+        bill_stack = bill_stack.add_stack(new_stack)
+        data['playerBills'] = bill_stack.bill_frequencies
+        return jsonify(data)
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for adding bill value"}), 400
+
+
+@app.route('/saveState/billValueSubtract', methods=['PUT'])
+def subtract_bill_value():
+    try:
+        double_param = float(request.args.get('double'))
+        data = request.get_json()
+        required_keys = ['playerBankAccountBalance', 'playerFullness', 'playerFeeling']
+        for key in required_keys:
+            if key not in data:
+                return jsonify({'error': f'Missing required key: {key}'}), 400
+        bill_stack = BillStack(data['playerBills'])
+        stack_to_remove = bill_stack.find_bill_combination(double_param)
+        bill_stack = bill_stack.subtract_stack(stack_to_remove)
+        data['playerBills'] = bill_stack.bill_frequencies
+        return jsonify(data)
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for subtracting bill value"}), 400
+
+
+@app.route('/saveState/billAdd', methods=['PUT'])
+def add_bills():
+    try:
+        denomination_param = str(request.args.get('denomination'))
+        quantity = int(request.args.get('quantity'))
+        data = request.get_json()
+        required_keys = ['playerBankAccountBalance', 'playerFullness', 'playerFeeling']
+        for key in required_keys:
+            if key not in data:
+                return jsonify({'error': f'Missing required key: {key}'}), 400
+        bill_stack = BillStack(data['playerBills'])
+        bill_stack = bill_stack.add_bills(denomination_param, quantity)
+        data['playerBills'] = bill_stack.bill_frequencies
+        return jsonify(data)
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for adding bills"}), 400
+
+
+@app.route('/saveState/billSubtract', methods=['PUT'])
+def subtract_bills():
+    try:
+        denomination_param = str(request.args.get('denomination'))
+        quantity = int(request.args.get('quantity'))
+        data = request.get_json()
+        required_keys = ['playerBankAccountBalance', 'playerFullness', 'playerFeeling']
+        for key in required_keys:
+            if key not in data:
+                return jsonify({'error': f'Missing required key: {key}'}), 400
+        bill_stack = BillStack(data['playerBills'])
+        bill_stack = bill_stack.subtract_bills(denomination_param, quantity)
+        data['playerBills'] = bill_stack.bill_frequencies
+        return jsonify(data)
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for subtracting bills"}), 400
+
+
+@app.route('/saveState/billValue', methods=['GET', "POST"])
+def get_bill_value():
+    try:
+        data = request.get_json()
+        print(str(data))
+        bill_stack = BillStack(data['playerBills'])
+        print(str(bill_stack))
+        stack_value = bill_stack.get_stack_value()
+        print(str(stack_value))
+        json = jsonify(stack_value)
+        print(json)
+        return json
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for getting bill value"}), 400
+
+
+@app.route('/saveState/coversBillValue', methods=['GET', "POST"])
+def covers_bill_value():
+    try:
+        bill_value_param = float(request.args.get('billValue'))
+        data = request.get_json()
+        bill_stack = BillStack(data['playerBills'])
+        bill_stack.find_bill_combination(bill_value_param)
+        if bill_stack:
+            return jsonify(True)
+        else:
+            return jsonify(False)
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for getting bill value"}), 400
 
 
 if __name__ == '__main__':

@@ -7,13 +7,13 @@ class TestBillStack(unittest.TestCase):
         bill_stack = BillStack()
 
         bill_stack.add_bills("ONE", 5)
-        self.assertEqual(bill_stack.bill_freqs["ONE"], 5)
+        self.assertEqual(bill_stack.bill_frequencies["ONE"], 5)
 
         bill_stack.add_bills("FIVE", 3)
-        self.assertEqual(bill_stack.bill_freqs["FIVE"], 3)
+        self.assertEqual(bill_stack.bill_frequencies["FIVE"], 3)
 
         bill_stack.add_bills("ONE", 2)
-        self.assertEqual(bill_stack.bill_freqs["ONE"], 7)
+        self.assertEqual(bill_stack.bill_frequencies["ONE"], 7)
 
     def test_find_bill_combination(self):
         bill_stack = BillStack().add_bills("HUNDRED", 1)
