@@ -6,16 +6,16 @@ class BillStack:
     def __init__(self, bill_frequencies=None):
         self.bill_frequencies = bill_frequencies or {}
 
-    def add_bills(self, denomination, quantity):
-        new_quantity = self.bill_frequencies.get(denomination, 0) + quantity
-        self.bill_frequencies[denomination] = new_quantity
-        return BillStack(self.bill_frequencies.copy())
-
-    def subtract_bills(self, denomination, quantity):
-        current_quantity = self.bill_frequencies.get(denomination, 0)
-        new_quantity = max(current_quantity - quantity, 0)
-        self.bill_frequencies[denomination] = new_quantity
-        return BillStack(self.bill_frequencies.copy())
+    def modify_bills(self, denomination, quantity):
+        new_bills = self.bill_frequencies.copy()
+        if quantity > 0:
+            new_quantity = new_bills.get(denomination, 0) + quantity
+            new_bills[denomination] = new_quantity
+        else:
+            current_quantity = new_bills.get(denomination, 0)
+            new_quantity = max(current_quantity + quantity, 0)
+            new_bills[denomination] = new_quantity
+        return BillStack(new_bills)
 
     def count_type_of_bill(self, denomination):
         return self.bill_frequencies.get(denomination, 0)
@@ -55,7 +55,7 @@ class BillStack:
         else:
             stack = BillStack()
             for bill in combination:
-                stack = stack.add_bills(bill, 1)
+                stack = stack.modify_bills(bill, 1)
             return stack
 
     def _find_bill_combination(self, target, bills):
@@ -78,7 +78,7 @@ class BillStack:
     def create_empty_stack(cls):
         stack = cls()
         for denomination in cls.denomination_list_ascending:
-            stack = stack.add_bills(denomination, 0)
+            stack = stack.modify_bills(denomination, 0)
         return stack
 
     @classmethod
@@ -87,7 +87,7 @@ class BillStack:
 
     @classmethod
     def create_stack_with_quantity(cls, denomination, quantity):
-        return cls.create_empty_stack().add_bills(denomination, quantity)
+        return cls.create_empty_stack().modify_bills(denomination, quantity)
 
     @classmethod
     def generate_stack_from_total(cls, total):
@@ -98,7 +98,7 @@ class BillStack:
             value = BillStack.denomination_value(denomination)
             number_of_bills = int(remainder / value)
             remainder = remainder % value
-            bill_stack = bill_stack.add_bills(denomination, number_of_bills)
+            bill_stack = bill_stack.modify_bills(denomination, number_of_bills)
 
         return bill_stack
 
