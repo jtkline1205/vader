@@ -135,27 +135,6 @@ def denomination_value_route():
         return jsonify({"error": "Invalid denomination name"}), 400
 
 
-@app.route('/saveState/bills/value', methods=['PUT'])
-def modify_bills_by_value():
-    try:
-        double_param = float(request.args.get('double'))
-        save_state = request.get_json()
-        verify_result = verify_keys(save_state)
-        if verify_result is not None:
-            return verify_result
-        bill_stack = BillStack(save_state['playerBills'])
-        if double_param > 0:
-            new_stack = BillStack.generate_stack_from_total(double_param)
-            bill_stack = bill_stack.add_stack(new_stack)
-        else:
-            stack_to_remove = bill_stack.find_bill_combination(double_param)
-            bill_stack = bill_stack.subtract_stack(stack_to_remove)
-        save_state['playerBills'] = bill_stack.bill_frequencies
-        return jsonify(save_state)
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for adding bill value"}), 400
-
-
 def verify_keys(save_state):
     required_keys = ['playerBankAccountBalance', 'playerFullness', 'playerFeeling']
     for key in required_keys:
@@ -167,15 +146,22 @@ def verify_keys(save_state):
 @app.route('/saveState/bills', methods=['PUT'])
 def modify_bills():
     try:
-        denomination_param = str(request.args.get('denomination'))
-        quantity = int(request.args.get('quantity'))
-        print("modify_bills called with denomination = " + denomination_param + " and quantity = " + str(quantity))
+        double_param = float(request.args.get('double', default=0.0))
+        denomination_param = str(request.args.get('denomination', default=""))
+        quantity = int(request.args.get('quantity', default=0))
         save_state = request.get_json()
         verify_result = verify_keys(save_state)
         if verify_result is not None:
             return verify_result
         bill_stack = BillStack(save_state['playerBills'])
-        bill_stack = bill_stack.modify_bills(denomination_param, quantity)
+        if double_param > 0:
+            new_stack = BillStack.generate_stack_from_total(double_param)
+            bill_stack = bill_stack.add_stack(new_stack)
+        elif double_param < 0:
+            stack_to_remove = bill_stack.find_bill_combination(double_param)
+            bill_stack = bill_stack.subtract_stack(stack_to_remove)
+        else:
+            bill_stack = bill_stack.modify_bills(denomination_param, quantity)
         save_state['playerBills'] = bill_stack.bill_frequencies
         return jsonify(save_state)
     except (ValueError, KeyError):
@@ -185,24 +171,17 @@ def modify_bills():
 @app.route('/saveState/bills/value', methods=['GET', 'POST'])
 def get_bill_value():
     try:
+        cover_value_param = float(request.args.get('coverValue', default=0.0))
         save_state = request.get_json()
         bill_stack = BillStack(save_state['playerBills'])
-        return jsonify(bill_stack.get_stack_value())
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for getting bill value"}), 400
-
-
-@app.route('/saveState/bills/value/cover', methods=['GET', 'POST'])
-def covers_bill_value():
-    try:
-        bill_value_param = float(request.args.get('billValue'))
-        save_state = request.get_json()
-        bill_stack = BillStack(save_state['playerBills'])
-        found_stack = bill_stack.find_bill_combination(bill_value_param)
-        if found_stack:
-            return jsonify(True)
+        if cover_value_param > 0.0:
+            found_stack = bill_stack.find_bill_combination(cover_value_param)
+            if found_stack:
+                return jsonify(0.0)
+            else:
+                return jsonify(1.0)
         else:
-            return jsonify(False)
+            return jsonify(bill_stack.get_stack_value())
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting bill value"}), 400
 
