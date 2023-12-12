@@ -7,18 +7,8 @@ app = Flask(__name__)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-ZERO = 0.0
-ONE = 1.0
-TWO_FIFTY = 2.50
-FIVE = 5.0
-TEN = 10.0
-TWENTY = 20.0
-TWENTY_FIVE = 25.0
-FIFTY = 50.0
-HUNDRED = 100.0
-
 the_map = {
-    ONE: {
+    1.0: {
         "color": "white",
         "dollar_jpeg": "one_dollar_bill.jpg",
         "chip_change": "1 White",
@@ -26,7 +16,7 @@ the_map = {
         "cash_exchange": "one_to_white.png",
         "chip_exchange": "white_to_one.png",
     },
-    TWO_FIFTY: {
+    2.50: {
         "color": "blue",
         "dollar_jpeg": "",
         "chip_change": "",
@@ -34,7 +24,7 @@ the_map = {
         "cash_exchange": "",
         "chip_exchange": "",
     },
-    FIVE: {
+    5.0: {
         "color": "red",
         "dollar_jpeg": "five_dollar_bill.png",
         "chip_change": "1 Red",
@@ -42,21 +32,21 @@ the_map = {
         "cash_exchange": "five_to_red.png",
         "chip_exchange": "red_to_five.png",
     },
-    TEN: {
+    10.0: {
         "dollar_jpeg": "ten_dollar_bill.jpg",
         "chip_change": "2 Red",
         "bill_to_chip": "FIVE",
         "cash_exchange": "ten_to_red.png",
         "chip_exchange": "red_to_ten.png",
     },
-    TWENTY: {
+    20.0: {
         "dollar_jpeg": "twenty_dollar_bill.jpg",
         "chip_change": "4 Red",
         "bill_to_chip": "FIVE",
         "cash_exchange": "twenty_to_red.png",
         "chip_exchange": "red_to_twenty.png",
     },
-    TWENTY_FIVE: {
+    25.0: {
         "color": "green",
         "dollar_jpeg": "",
         "chip_change": "",
@@ -64,14 +54,14 @@ the_map = {
         "cash_exchange": "",
         "chip_exchange": "",
     },
-    FIFTY: {
+    50.0: {
         "dollar_jpeg": "fifty_dollar_bill.jpg",
         "chip_change": "2 Green",
         "bill_to_chip": "TWENTY_FIVE",
         "cash_exchange": "fifty_to_green.png",
         "chip_exchange": "green_to_fifty.png",
     },
-    HUNDRED: {
+    100.0: {
         "color": "black",
         "dollar_jpeg": "hundred_dollar_bill.jpg",
         "chip_change": "1 Black",
@@ -135,7 +125,7 @@ def verify_keys(save_state):
 @app.route('/saveState/bills', methods=['PUT'])
 def modify_bills():
     try:
-        double_param = float(request.args.get('double', default=0.0))
+        double_param = float(request.args.get('exactValue', default=0.0))
         denomination_param = str(request.args.get('denomination', default=""))
         quantity = int(request.args.get('quantity', default=0))
         save_state = request.get_json()
@@ -154,7 +144,32 @@ def modify_bills():
         save_state['playerBills'] = bill_stack.item_frequencies
         return jsonify(save_state)
     except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for adding bills"}), 400
+        return jsonify({"error": "Invalid request for modifying bills"}), 400
+
+
+@app.route('/saveState/chips', methods=['PUT'])
+def modify_chips():
+    try:
+        double_param = float(request.args.get('exactValue', default=0.0))
+        denomination_param = str(request.args.get('denomination', default=""))
+        quantity = int(request.args.get('quantity', default=0))
+        save_state = request.get_json()
+        verify_result = verify_keys(save_state)
+        if verify_result is not None:
+            return verify_result
+        chip_stack = ItemStack(save_state['playerChips'])
+        if double_param > 0:
+            new_stack = ItemStack.generate_chip_stack_from_total(double_param)
+            chip_stack = chip_stack.add_stack(new_stack)
+        elif double_param < 0:
+            stack_to_remove = chip_stack.find_chip_combination(double_param)
+            chip_stack = chip_stack.subtract_stack(stack_to_remove)
+        else:
+            chip_stack = chip_stack.modify_items(denomination_param, quantity)
+        save_state['playerChips'] = chip_stack.item_frequencies
+        return jsonify(save_state)
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for modifying chips"}), 400
 
 
 @app.route('/saveState/bills/value', methods=['GET', 'POST'])
@@ -173,6 +188,27 @@ def get_bill_value():
             return jsonify(bill_stack.get_stack_value())
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting bill value"}), 400
+
+
+@app.route('/saveState/chips/value', methods=['GET', 'POST'])
+def get_chip_value():
+    try:
+        save_state = request.get_json()
+        chip_stack = ItemStack(save_state['playerChips'])
+        return jsonify(chip_stack.get_stack_value())
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for getting chip value"}), 400
+
+
+@app.route('/saveState/chips', methods=['GET', 'POST'])
+def get_count_of_chips():
+    try:
+        chip_denom_param = str(request.args.get('chipDenomination', default=""))
+        save_state = request.get_json()
+        chip_stack = ItemStack(save_state['playerChips'])
+        return jsonify(chip_stack.count_type_of_item(chip_denom_param))
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for getting chip value"}), 400
 
 
 @app.route('/saveState/transactions', methods=['GET', 'POST'])

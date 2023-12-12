@@ -2,6 +2,8 @@ class ItemStack:
 
     bill_denomination_list_ascending = ["ONE", "FIVE", "TEN", "TWENTY", "FIFTY", "HUNDRED"]
     bill_denomination_list_descending = ["HUNDRED", "FIFTY", "TWENTY", "TEN", "FIVE", "ONE"]
+    chip_denomination_list_ascending = ["ONE", "TWO_FIFTY", "FIVE", "TWENTY_FIVE", "HUNDRED"]
+    chip_denomination_list_descending = ["HUNDRED", "TWENTY_FIVE", "FIVE", "TWO_FIFTY", "ONE"]
 
     def __init__(self, item_frequencies=None):
         self.item_frequencies = item_frequencies or {}
@@ -58,6 +60,9 @@ class ItemStack:
                 stack = stack.modify_items(item, 1)
             return stack
 
+    def find_chip_combination(self, double_param):
+        pass
+
     def _find_item_combination(self, target, items):
         if target == 0:
             return []
@@ -103,6 +108,19 @@ class ItemStack:
         return bill_stack
 
     @classmethod
+    def generate_chip_stack_from_total(cls, total):
+        chip_stack = cls.create_empty_chip_stack()
+        remainder = total
+
+        for denomination in cls.chip_denomination_list_descending:
+            value = ItemStack.denomination_value(denomination)
+            number_of_chips = int(remainder / value)
+            remainder = remainder % value
+            chip_stack = chip_stack.modify_items(denomination, number_of_chips)
+
+        return chip_stack
+
+    @classmethod
     def denomination_value(cls, denomination):
         resource_name_map = {
             "ZERO": 0.0,
@@ -116,3 +134,14 @@ class ItemStack:
             "HUNDRED": 100.0
         }
         return resource_name_map[denomination]
+
+    @classmethod
+    def create_empty_chip_stack(cls):
+        stack = cls()
+        for denomination in cls.chip_denomination_list_ascending:
+            stack = stack.modify_items(denomination, 0)
+        return stack
+
+
+
+
