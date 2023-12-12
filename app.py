@@ -82,52 +82,36 @@ the_map = {
 }
 
 
-@app.route('/colors/chips', methods=['GET'])
-def chip_color():
+@app.route('/resource', methods=['GET'])
+def get_resource():
     try:
-        return jsonify({"color": the_map[float(request.args.get('double'))]["color"]})
+        chip_value_for_color = float(request.args.get('chipColorValue', default=0.0))
+        dollar_value_for_jpeg = float(request.args.get('dollarJpegValue', default=0.0))
+        chip_value_for_string = float(request.args.get('chipChangeStringValue', default=0.0))
+        bill_value_for_chip_string = float(request.args.get('billForChipStringValue', default=0.0))
+        if chip_value_for_color > 0:
+            return jsonify({"chip_color": the_map[chip_value_for_color]["color"]})
+        if dollar_value_for_jpeg > 0:
+            return jsonify({"dollar_jpeg_name": the_map[dollar_value_for_jpeg]['dollar_jpeg']})
+        if chip_value_for_string > 0:
+            return jsonify({"chip_change_string": the_map[chip_value_for_string]['chip_change']})
+        if bill_value_for_chip_string > 0:
+            return jsonify({"chip_name": the_map[bill_value_for_chip_string]['bill_to_chip']})
     except (ValueError, KeyError):
-        return jsonify({"error": "Invalid chip value"}), 400
+        return jsonify({"error": "Invalid resource request"}), 400
 
 
-@app.route('/images/bills', methods=['GET'])
-def dollar_jpeg_name():
+@app.route('/images/exchange', methods=['GET'])
+def exchange_filename():
     try:
-        return jsonify({"dollar_jpeg_name": the_map[float(request.args.get('double'))]['dollar_jpeg']})
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid bill value"}), 400
-
-
-@app.route('/strings/chips/change', methods=['GET'])
-def chip_change_string():
-    try:
-        return jsonify({"chip_change_string": the_map[float(request.args.get('double'))]['chip_change']})
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid chip value"}), 400
-
-
-@app.route('/strings/bills/chips', methods=['GET'])
-def bill_to_chip_string():
-    try:
-        return jsonify({"chip_name": the_map[float(request.args.get('billValue'))]['bill_to_chip']})
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid bill name"}), 400
-
-
-@app.route('/images/bills/change', methods=['GET'])
-def cash_exchange_filename():
-    try:
-        return jsonify({"cash_exchange_filename": the_map[float(request.args.get('billValue'))]['cash_exchange']})
+        bill_value_cash = float(request.args.get('billValue', default=0.0))
+        chip_value_cash = float(request.args.get('chipValue', default=0.0))
+        if bill_value_cash > 0:
+            return jsonify({"filename": the_map[bill_value_cash]['cash_exchange']})
+        else:
+            return jsonify({"filename": the_map[chip_value_cash]['chip_exchange']})
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid bill value"}), 400
-
-
-@app.route('/images/chips/change', methods=['GET'])
-def chip_exchange_filename():
-    try:
-        return jsonify({"chip_exchange_filename": the_map[float(request.args.get('chipValue'))]['chip_exchange']})
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid chip value"}), 400
 
 
 @app.route('/doubles', methods=['GET'])
