@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request
-from bill_stack import BillStack
+from item_stack import ItemStack
 import logging
 
 app = Flask(__name__)
@@ -118,7 +118,7 @@ def exchange_filename():
 def denomination_value_route():
     try:
         denomination_name = str(request.args.get('name'))
-        resource_name = BillStack.denomination_value(denomination_name)
+        resource_name = ItemStack.denomination_value(denomination_name)
         return jsonify({"value": resource_name})
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid denomination name"}), 400
@@ -142,16 +142,16 @@ def modify_bills():
         verify_result = verify_keys(save_state)
         if verify_result is not None:
             return verify_result
-        bill_stack = BillStack(save_state['playerBills'])
+        bill_stack = ItemStack(save_state['playerBills'])
         if double_param > 0:
-            new_stack = BillStack.generate_stack_from_total(double_param)
+            new_stack = ItemStack.generate_bill_stack_from_total(double_param)
             bill_stack = bill_stack.add_stack(new_stack)
         elif double_param < 0:
             stack_to_remove = bill_stack.find_bill_combination(double_param)
             bill_stack = bill_stack.subtract_stack(stack_to_remove)
         else:
-            bill_stack = bill_stack.modify_bills(denomination_param, quantity)
-        save_state['playerBills'] = bill_stack.bill_frequencies
+            bill_stack = bill_stack.modify_items(denomination_param, quantity)
+        save_state['playerBills'] = bill_stack.item_frequencies
         return jsonify(save_state)
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for adding bills"}), 400
@@ -162,7 +162,7 @@ def get_bill_value():
     try:
         cover_value_param = float(request.args.get('coverValue', default=0.0))
         save_state = request.get_json()
-        bill_stack = BillStack(save_state['playerBills'])
+        bill_stack = ItemStack(save_state['playerBills'])
         if cover_value_param > 0.0:
             found_stack = bill_stack.find_bill_combination(cover_value_param)
             if found_stack:
