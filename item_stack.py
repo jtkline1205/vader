@@ -35,6 +35,31 @@ class ItemStack:
             new_map[denomination] = max(0, new_quantity)
         return ItemStack(new_map)
 
+    def multiply_stack_by_factor(self, factor):
+        print("multiplying with factor = " + str(factor))
+        new_map = self.item_frequencies.copy()
+        if factor == 1.5:
+            for denomination, operand_chips in self.item_frequencies.items():
+                if operand_chips > 0:
+                    half_list = {
+                        "HUNDRED": [("TWENTY_FIVE", 2)],
+                        "TWENTY_FIVE": [("FIVE", 2), ("TWO_FIFTY", 1)],
+                        "FIVE": [("TWO_FIFTY", 1)],
+                        "TWO_FIFTY": [("ONE", 1)],
+                        "ONE": [],
+                    }.get(denomination, [])
+
+                    for denom, quantity in half_list:
+                        original_quantity = new_map.get(denom, 0)
+                        new_map[denom] = original_quantity + (quantity * operand_chips)
+        else:
+            for denomination in new_map.keys():
+                print("another denomination = " + str(denomination))
+                print(new_map.get(denomination, 0) * factor)
+                new_map[denomination] = int(new_map.get(denomination, 0) * factor)
+
+        return ItemStack(new_map)
+
     def contains_stack(self, stack):
         for denomination in stack.item_frequencies.keys():
             if denomination not in self.item_frequencies or self.item_frequencies[denomination] < stack.item_frequencies[denomination]:

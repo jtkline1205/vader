@@ -20,6 +20,14 @@ class TestItemStack(unittest.TestCase):
         self.assertEqual(item_stack.item_frequencies["FIFTY"], 8)
         self.assertEqual(item_stack.item_frequencies["ONE"], 0)
 
+    def test_multiply_stack(self):
+        item_stack = ItemStack().modify_items("ONE", 5)
+        item_stack = item_stack.multiply_stack_by_factor(10)
+        self.assertEqual(item_stack.item_frequencies["ONE"], 50)
+        item_stack = ItemStack().modify_items("ONE", 5)
+        item_stack = item_stack.multiply_stack_by_factor(-1)
+        self.assertEqual(item_stack.item_frequencies["ONE"], -5)
+
     def test_find_bill_combination(self):
         item_stack = ItemStack().modify_items("HUNDRED", 1)
         combination = item_stack.find_bill_combination(100)

@@ -234,6 +234,18 @@ def get_transactions():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/stack/multiply', methods=['GET', 'POST'])
+def multiply_stack():
+    try:
+        factor_param = float(request.args.get('factor', default=0.0))
+        stack_json = request.get_json()
+        stack = ItemStack(stack_json['chipFreqMap'])
+        stack = stack.multiply_stack_by_factor(factor_param)
+        return jsonify({"chipFreqMap": stack.item_frequencies})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
 
