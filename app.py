@@ -204,7 +204,7 @@ def get_save_state_chip_value():
 def get_chip_stack_value():
     try:
         chip_freq_map = request.get_json()
-        stack = ItemStack(chip_freq_map['chipFreqMap'])
+        stack = ItemStack(chip_freq_map)
         return jsonify(stack.get_stack_value())
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip value"}), 400
@@ -239,9 +239,9 @@ def multiply_stack():
     try:
         factor_param = float(request.args.get('factor', default=0.0))
         stack_json = request.get_json()
-        stack = ItemStack(stack_json['chipFreqMap'])
+        stack = ItemStack(stack_json)
         stack = stack.multiply_stack_by_factor(factor_param)
-        return jsonify({"chipFreqMap": stack.item_frequencies})
+        return jsonify(stack.item_frequencies)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
