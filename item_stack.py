@@ -30,9 +30,10 @@ class ItemStack:
 
     def subtract_stack(self, stack_to_subtract):
         new_map = self.item_frequencies.copy()
-        for denomination in stack_to_subtract.item_frequencies.keys():
-            new_quantity = new_map.get(denomination, 0) - stack_to_subtract.item_frequencies[denomination]
-            new_map[denomination] = max(0, new_quantity)
+        if stack_to_subtract is not None:
+            for denomination in stack_to_subtract.item_frequencies.keys():
+                new_quantity = new_map.get(denomination, 0) - stack_to_subtract.item_frequencies[denomination]
+                new_map[denomination] = max(0, new_quantity)
         return ItemStack(new_map)
 
     def multiply_stack_by_factor(self, factor):
