@@ -36,7 +36,6 @@ class ItemStack:
         return ItemStack(new_map)
 
     def multiply_stack_by_factor(self, factor):
-        print("multiplying with factor = " + str(factor))
         new_map = self.item_frequencies.copy()
         if factor == 1.5:
             for denomination, operand_chips in self.item_frequencies.items():
@@ -54,8 +53,6 @@ class ItemStack:
                         new_map[denom] = original_quantity + (quantity * operand_chips)
         else:
             for denomination in new_map.keys():
-                print("another denomination = " + str(denomination))
-                print(new_map.get(denomination, 0) * factor)
                 new_map[denomination] = int(new_map.get(denomination, 0) * factor)
 
         return ItemStack(new_map)
