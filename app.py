@@ -137,7 +137,7 @@ def modify_bills():
             new_stack = ItemStack.generate_bill_stack_from_total(double_param)
             bill_stack = bill_stack.add_stack(new_stack)
         elif double_param < 0:
-            stack_to_remove = bill_stack.find_bill_combination(double_param)
+            stack_to_remove = bill_stack.find_bill_combination(double_param * -1)
             bill_stack = bill_stack.subtract_stack(stack_to_remove)
         else:
             bill_stack = bill_stack.modify_items(denomination_param, quantity)
