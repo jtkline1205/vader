@@ -191,11 +191,21 @@ def get_bill_value():
 
 
 @app.route('/saveState/chips/value', methods=['GET', 'POST'])
-def get_chip_value():
+def get_save_state_chip_value():
     try:
         save_state = request.get_json()
         chip_stack = ItemStack(save_state['playerChips'])
         return jsonify(chip_stack.get_stack_value())
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for getting chip value"}), 400
+
+
+@app.route('/chips/value', methods=['GET', 'POST'])
+def get_chip_stack_value():
+    try:
+        chip_freq_map = request.get_json()
+        stack = ItemStack(chip_freq_map['chipFreqMap'])
+        return jsonify(stack.get_stack_value())
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip value"}), 400
 
