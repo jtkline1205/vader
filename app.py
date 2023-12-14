@@ -1,75 +1,12 @@
 from flask import Flask, jsonify, request
 from item_stack import ItemStack
+from resource_finder import ResourceFinder
 import logging
 
 app = Flask(__name__)
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
-
-the_map = {
-    1.0: {
-        "color": "white",
-        "dollar_jpeg": "one_dollar_bill.jpg",
-        "chip_change": "1 White",
-        "bill_to_chip": "ONE",
-        "cash_exchange": "one_to_white.png",
-        "chip_exchange": "white_to_one.png",
-    },
-    2.50: {
-        "color": "blue",
-        "dollar_jpeg": "",
-        "chip_change": "",
-        "bill_to_chip": "",
-        "cash_exchange": "",
-        "chip_exchange": "",
-    },
-    5.0: {
-        "color": "red",
-        "dollar_jpeg": "five_dollar_bill.png",
-        "chip_change": "1 Red",
-        "bill_to_chip": "FIVE",
-        "cash_exchange": "five_to_red.png",
-        "chip_exchange": "red_to_five.png",
-    },
-    10.0: {
-        "dollar_jpeg": "ten_dollar_bill.jpg",
-        "chip_change": "2 Red",
-        "bill_to_chip": "FIVE",
-        "cash_exchange": "ten_to_red.png",
-        "chip_exchange": "red_to_ten.png",
-    },
-    20.0: {
-        "dollar_jpeg": "twenty_dollar_bill.jpg",
-        "chip_change": "4 Red",
-        "bill_to_chip": "FIVE",
-        "cash_exchange": "twenty_to_red.png",
-        "chip_exchange": "red_to_twenty.png",
-    },
-    25.0: {
-        "color": "green",
-        "dollar_jpeg": "",
-        "chip_change": "",
-        "bill_to_chip": "",
-        "cash_exchange": "",
-        "chip_exchange": "",
-    },
-    50.0: {
-        "dollar_jpeg": "fifty_dollar_bill.jpg",
-        "chip_change": "2 Green",
-        "bill_to_chip": "TWENTY_FIVE",
-        "cash_exchange": "fifty_to_green.png",
-        "chip_exchange": "green_to_fifty.png",
-    },
-    100.0: {
-        "color": "black",
-        "dollar_jpeg": "hundred_dollar_bill.jpg",
-        "chip_change": "1 Black",
-        "bill_to_chip": "HUNDRED",
-        "cash_exchange": "hundred_to_black.png",
-        "chip_exchange": "black_to_hundred.png",
-    },
-}
 
 
 @app.route('/resource', methods=['GET'])
@@ -79,14 +16,15 @@ def get_resource():
         dollar_value_for_jpeg = float(request.args.get('dollarJpegValue', default=0.0))
         chip_value_for_string = float(request.args.get('chipChangeStringValue', default=0.0))
         bill_value_for_chip_string = float(request.args.get('billForChipStringValue', default=0.0))
+        resource_finder = ResourceFinder()
         if chip_value_for_color > 0:
-            return jsonify({"chip_color": the_map[chip_value_for_color]["color"]})
+            return jsonify({"chip_color": resource_finder.get_resource(chip_value_for_color, "color")})
         if dollar_value_for_jpeg > 0:
-            return jsonify({"dollar_jpeg_name": the_map[dollar_value_for_jpeg]['dollar_jpeg']})
+            return jsonify({"dollar_jpeg_name": resource_finder.get_resource(dollar_value_for_jpeg, "dollar_jpeg")})
         if chip_value_for_string > 0:
-            return jsonify({"chip_change_string": the_map[chip_value_for_string]['chip_change']})
+            return jsonify({"chip_change_string": resource_finder.get_resource(chip_value_for_string, "chip_change")})
         if bill_value_for_chip_string > 0:
-            return jsonify({"chip_name": the_map[bill_value_for_chip_string]['bill_to_chip']})
+            return jsonify({"chip_name": resource_finder.get_resource(bill_value_for_chip_string, "bill_to_chip")})
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid resource request"}), 400
 
@@ -96,10 +34,11 @@ def exchange_filename():
     try:
         bill_value_cash = float(request.args.get('billValue', default=0.0))
         chip_value_cash = float(request.args.get('chipValue', default=0.0))
+        resource_finder = ResourceFinder()
         if bill_value_cash > 0:
-            return jsonify({"filename": the_map[bill_value_cash]['cash_exchange']})
+            return jsonify({"filename": resource_finder.get_resource(bill_value_cash, "cash_exchange")})
         else:
-            return jsonify({"filename": the_map[chip_value_cash]['chip_exchange']})
+            return jsonify({"filename": resource_finder.get_resource(chip_value_cash, "chip_exchange")})
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid bill value"}), 400
 
