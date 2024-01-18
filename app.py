@@ -1,12 +1,86 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
+from flask_socketio import SocketIO, emit
+import psycopg2
 from item_stack import ItemStack
 from resource_finder import ResourceFinder
 import logging
 
 app = Flask(__name__)
+CORS(app, origins="http://localhost:3000")  # Allow connections from http://localhost:3000
+socketio = SocketIO(app, cors_allowed_origins="http://localhost:3000")
+
+db_params = {
+    'dbname': 'neptune-data',
+    'user': 'postgres',
+    'password': 'password',
+    'host': 'localhost',
+    'port': '5432',
+}
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
+
+@socketio.on('connect', namespace='/')
+def connect():
+    print('Client connected')
+
+
+@socketio.on('disconnect', namespace='/')
+def disconnect():
+    print('Client disconnected')
+
+@socketio.on('data_changed', namespace = '/')
+def handle_data_change():
+    # Notify clients when data changes
+    emit('data_changed', broadcast=True)
+
+@app.route('/wallets', methods=['GET'])
+def get_data():
+    try:
+        id = request.args.get('id')
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('SELECT * FROM wallets WHERE wallet_id = ' + id)
+        data = cursor.fetchall()
+        cursor.close()
+        connection.close()
+        columns = [col[0] for col in cursor.description]
+        result = [dict(zip(columns, row)) for row in data]
+        return jsonify(result)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+@app.route('/wallets', methods=['POST'])
+def post_data():
+    try:
+        payload = request.json
+        ones = payload.get('ONE', 0)
+        fives = payload.get('FIVE', 0)
+        tens = payload.get('TEN', 0)
+        twenties = payload.get('TWENTY', 0)
+        fifties = payload.get('FIFTY', 0)
+        hundreds = payload.get('HUNDRED', 0)
+
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('UPDATE wallets set ones = %s WHERE wallet_id = 1', (ones,))
+        cursor.execute('UPDATE wallets set fives = %s WHERE wallet_id = 1', (fives,))
+        cursor.execute('UPDATE wallets set tens = %s WHERE wallet_id = 1', (tens,))
+        cursor.execute('UPDATE wallets set twenties = %s WHERE wallet_id = 1', (twenties,))
+        cursor.execute('UPDATE wallets set fifties = %s WHERE wallet_id = 1', (fifties,))
+        cursor.execute('UPDATE wallets set hundreds = %s WHERE wallet_id = 1', (hundreds,))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+        # Notify clients about the data change
+        socketio.emit('data_changed', namespace='/')
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
 
 
 @app.route('/resource', methods=['GET'])
@@ -186,7 +260,8 @@ def multiply_stack():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    socketio.run(app, host='localhost', port=5000)
+
 
 
 
