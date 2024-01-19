@@ -185,7 +185,79 @@ def post_wallets():
 #     setupTitleLabel(RestaurantItem.itemList.map(item => item.name + ": " + fmt.format(item.price)).mkString(" / "), Font.ITALIC, 25)
 #   }
 
+@app.route('/feeling', methods=["GET"])
+def get_feeling():
+    try:
+        id = request.args.get('id')
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('SELECT feeling FROM players WHERE player_id = %s', (id,))
+        data = cursor.fetchall()
+        cursor.close()
+        connection.close()
+        # columns = [col[0] for col in cursor.description]
+        # result = [dict(zip(columns, row)) for row in data]
+        return jsonify(data[0][0])
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500    
 
+@app.route('/hydration/subtract', methods=["POST"])
+def subtract_hydration():
+    try:
+        payload = request.json
+        #subtract hydration here
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500  
+    
+@app.route('/fullness/subtract', methods=["POST"])
+def subtract_fullness():
+    try:
+        payload = request.json
+        #subtract fullness here
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500  
+
+@app.route('/hydration', methods=["GET"])
+def get_hydration():
+    try:
+        id = request.args.get('id')
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('SELECT hydration FROM players WHERE player_id = %s', (id,))
+        data = cursor.fetchall()
+        # print(data)
+        cursor.close()
+        connection.close()
+        # columns = [col[0] for col in cursor.description]
+        # print(columns)
+        # result = [dict(zip(columns, row)) for row in data]
+        # print(result)
+        return jsonify(data[0][0])
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500  
+    
+@app.route('/fullness', methods=["GET"])
+def get_fullness():
+    try:
+        id = request.args.get('id')
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('SELECT fullness FROM players WHERE player_id = %s', (id,))
+        data = cursor.fetchall()
+        cursor.close()
+        connection.close()
+        # columns = [col[0] for col in cursor.description]
+        # result = [dict(zip(columns, row)) for row in data]
+        return jsonify(data[0][0])
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500  
 
 @app.route('/playerChips', methods=['POST'])
 def post_player_chips():
@@ -298,7 +370,7 @@ def denomination_value_route():
 
 
 def verify_keys(save_state):
-    required_keys = ['playerBankAccountBalance', 'playerFullness', 'playerFeeling']
+    required_keys = ['playerBankAccountBalance']
     for key in required_keys:
         if key not in save_state:
             return jsonify({'error': f'save_state missing required key: {key}'}), 400
