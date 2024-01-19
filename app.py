@@ -25,18 +25,16 @@ log.setLevel(logging.ERROR)
 def connect():
     print('Client connected')
 
-
 @socketio.on('disconnect', namespace='/')
 def disconnect():
     print('Client disconnected')
 
 @socketio.on('data_changed', namespace = '/')
 def handle_data_change():
-    # Notify clients when data changes
     emit('data_changed', broadcast=True)
 
 @app.route('/wallets', methods=['GET'])
-def get_data():
+def get_wallets():
     try:
         id = request.args.get('id')
         connection = psycopg2.connect(**db_params)
@@ -53,7 +51,7 @@ def get_data():
         return jsonify({'error': 'Internal Server Error'}), 500
 
 @app.route('/wallets', methods=['POST'])
-def post_data():
+def post_wallets():
     try:
         payload = request.json
         ones = payload.get('ONE', 0)
@@ -82,6 +80,178 @@ def post_data():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
+
+# def restaurant():
+#     package casino
+
+# case class RestaurantItem(
+#                            price: Double,
+#                            name: String,
+#                            hydration: Double,
+#                            fullness: Double,
+#                          ) {
+
+# }
+
+# object RestaurantItem {
+
+#   private val PIZZA_FULLNESS = 30.0
+#   private val BURGER_FULLNESS = 50.0
+
+#   private val DRINK_HYDRATION = 25.0
+
+#   private val DRINK: RestaurantItem = RestaurantItem(Restaurant.DRINK_PRICE, "Drink", DRINK_HYDRATION, 0.0)
+#   private val PIZZA: RestaurantItem = RestaurantItem(Restaurant.PIZZA_PRICE, "Pizza", 0.0, PIZZA_FULLNESS)
+#   private val BURGER: RestaurantItem = RestaurantItem(Restaurant.BURGER_PRICE, "Burger", 0.0, BURGER_FULLNESS)
+
+#   val itemList: Seq[RestaurantItem] = Seq(BURGER, PIZZA, DRINK)
+
+#   def getItemByName(name: String): RestaurantItem = {
+#     val map: Map[String, RestaurantItem] = Map(
+#       "Drink" -> DRINK,
+#       "Pizza" -> PIZZA,
+#       "Burger" -> BURGER,
+#     )
+#     map(name)
+#   }
+
+# }
+    
+#       def updatePlayerStatus(item: RestaurantItem): PatronSaveState = {
+#     addToPlayerHydration(item.hydration).addToPlayerFullness(item.fullness)
+#   }
+    
+#       def updatePlayerStatus(item: RestaurantItem): SaveState = {
+#     copy(
+#       mainPatronSaveState = mainPatronSaveState.addToPlayerHydration(item.hydration).addToPlayerFullness(item.fullness)
+#     )
+#   }
+    
+
+#     package casino.ui
+
+# import casino.{RestaurantItem, SaveState}
+# import casino.types.CasinoExperienceType
+# import casino.ui.buttons.{CasinoButton, PurchaseItemButton}
+# import util.AccountingServiceConnector
+# import util.panels.{CasinoPanel, TableGameTitlePanel}
+
+# import java.awt.GridLayout
+# import java.awt.event.{ActionEvent, ActionListener}
+# import javax.swing.{BorderFactory, BoxLayout}
+
+# class RestaurantPanel(val parentLobbyPanel: LobbyPanel, var restaurantSaveState: SaveState) extends CasinoExperiencePanel(parentLobbyPanel.parentFrame.pack, restaurantSaveState.mainPatronSaveState.playerChips) with ActionListener {
+
+#   private val purchaseItemButtonMap: Map[RestaurantItem, PurchaseItemButton] = RestaurantItem.itemList.map(item => {
+#     val button = new PurchaseItemButton("Purchase " + item.name)
+#     button.addActionListener(this)
+#     item -> button
+#   }).toMap
+
+#   setBorder(BorderFactory.createLineBorder(CasinoPanel.GOLD, 10))
+
+#   alphaPanel.setLayout(new GridLayout(1, 1))
+#   betaPanel.setLayout(new BoxLayout(betaPanel, BoxLayout.X_AXIS))
+
+#   alphaPanel.add(TableGameTitlePanel(CasinoExperienceType.RESTAURANT))
+
+#   for (key <- purchaseItemButtonMap.keys) {
+#     betaPanel.add(purchaseItemButtonMap(key))
+#   }
+#   add(alphaPanel)
+#   add(betaPanel)
+
+#   override def actionPerformed(ae: ActionEvent): Unit = {
+#     val button: CasinoButton = ae.getSource.asInstanceOf[CasinoButton]
+#     val connector = new AccountingServiceConnector()
+#     button match {
+#       case _: PurchaseItemButton =>
+#         val item = RestaurantItem.getItemByName(button.getText.substring("Purchase ".length))
+#         if (connector.getBillValue(restaurantSaveState.mainPatronSaveState, item.price) == 0.0) {
+#           restaurantSaveState = restaurantSaveState.passCasinoTime().updatePlayerStatus(item)
+#           restaurantSaveState.mainPatronSaveState = connector.setBills(restaurantSaveState.mainPatronSaveState, exactValue = item.price * -1)
+#         }
+#       case _ =>
+#     }
+#     parentLobbyPanel.updatePocketsPanel(restaurantSaveState)
+#     packParentFrame()
+#   }
+
+# }
+    
+#       private def setupRestaurantTitleLabel(): JLabel = {
+#     val fmt = NumberFormat.getCurrencyInstance()
+#     fmt.setMaximumFractionDigits(2)
+#     setupTitleLabel(RestaurantItem.itemList.map(item => item.name + ": " + fmt.format(item.price)).mkString(" / "), Font.ITALIC, 25)
+#   }
+
+
+
+@app.route('/playerChips', methods=['POST'])
+def post_player_chips():
+    try:
+        payload = request.json
+        chip_ones = payload.get('ONE', 0)
+        chip_twofifties = payload.get('TWO_FIFTY', 0)
+        chip_fives = payload.get('FIVE', 0)
+        chip_twentyfives = payload.get('TWENTY_FIVE', 0)
+        chip_hundreds = payload.get('HUNDRED', 0)
+
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('UPDATE wallets set chip_ones = %s WHERE wallet_id = 1', (chip_ones,))
+        cursor.execute('UPDATE wallets set chip_twofifties = %s WHERE wallet_id = 1', (chip_twofifties,))
+        cursor.execute('UPDATE wallets set chip_fives = %s WHERE wallet_id = 1', (chip_fives,))
+        cursor.execute('UPDATE wallets set chip_twentyfives = %s WHERE wallet_id = 1', (chip_twentyfives,))
+        cursor.execute('UPDATE wallets set chip_hundreds = %s WHERE wallet_id = 1', (chip_hundreds,))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+        # Notify clients about the data change
+        socketio.emit('data_changed', namespace='/')
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+@app.route('/playersClub', methods=['POST'])
+def post_players_club():
+    try:
+        payload = request.json
+
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('UPDATE wallets set players_club = %s WHERE wallet_id = 1', (payload,))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+        # Notify clients about the data change
+        socketio.emit('data_changed', namespace='/')
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+    
+@app.route('/debitCardInWallet', methods=['POST'])
+def post_debit_card_in_wallet():
+    try:
+        payload = request.json
+
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('UPDATE wallets set debit_card = %s WHERE wallet_id = 1', (payload,))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+        # Notify clients about the data change
+        socketio.emit('data_changed', namespace='/')
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
 
 @app.route('/resource', methods=['GET'])
 def get_resource():
