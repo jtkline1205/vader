@@ -1,10 +1,11 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
-import psycopg2
 from item_stack import ItemStack
 from resource_finder import ResourceFinder
+
 import logging
+import psycopg2
 
 app = Flask(__name__)
 CORS(app, origins="http://localhost:3000")  # Allow connections from http://localhost:3000
@@ -80,111 +81,6 @@ def post_wallets():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-
-# def restaurant():
-#     package casino
-
-# case class RestaurantItem(
-#                            price: Double,
-#                            name: String,
-#                            hydration: Double,
-#                            fullness: Double,
-#                          ) {
-
-# }
-
-# object RestaurantItem {
-
-#   private val PIZZA_FULLNESS = 30.0
-#   private val BURGER_FULLNESS = 50.0
-
-#   private val DRINK_HYDRATION = 25.0
-
-#   private val DRINK: RestaurantItem = RestaurantItem(Restaurant.DRINK_PRICE, "Drink", DRINK_HYDRATION, 0.0)
-#   private val PIZZA: RestaurantItem = RestaurantItem(Restaurant.PIZZA_PRICE, "Pizza", 0.0, PIZZA_FULLNESS)
-#   private val BURGER: RestaurantItem = RestaurantItem(Restaurant.BURGER_PRICE, "Burger", 0.0, BURGER_FULLNESS)
-
-#   val itemList: Seq[RestaurantItem] = Seq(BURGER, PIZZA, DRINK)
-
-#   def getItemByName(name: String): RestaurantItem = {
-#     val map: Map[String, RestaurantItem] = Map(
-#       "Drink" -> DRINK,
-#       "Pizza" -> PIZZA,
-#       "Burger" -> BURGER,
-#     )
-#     map(name)
-#   }
-
-# }
-    
-#       def updatePlayerStatus(item: RestaurantItem): PatronSaveState = {
-#     addToPlayerHydration(item.hydration).addToPlayerFullness(item.fullness)
-#   }
-    
-#       def updatePlayerStatus(item: RestaurantItem): SaveState = {
-#     copy(
-#       mainPatronSaveState = mainPatronSaveState.addToPlayerHydration(item.hydration).addToPlayerFullness(item.fullness)
-#     )
-#   }
-    
-
-#     package casino.ui
-
-# import casino.{RestaurantItem, SaveState}
-# import casino.types.CasinoExperienceType
-# import casino.ui.buttons.{CasinoButton, PurchaseItemButton}
-# import util.AccountingServiceConnector
-# import util.panels.{CasinoPanel, TableGameTitlePanel}
-
-# import java.awt.GridLayout
-# import java.awt.event.{ActionEvent, ActionListener}
-# import javax.swing.{BorderFactory, BoxLayout}
-
-# class RestaurantPanel(val parentLobbyPanel: LobbyPanel, var restaurantSaveState: SaveState) extends CasinoExperiencePanel(parentLobbyPanel.parentFrame.pack, restaurantSaveState.mainPatronSaveState.playerChips) with ActionListener {
-
-#   private val purchaseItemButtonMap: Map[RestaurantItem, PurchaseItemButton] = RestaurantItem.itemList.map(item => {
-#     val button = new PurchaseItemButton("Purchase " + item.name)
-#     button.addActionListener(this)
-#     item -> button
-#   }).toMap
-
-#   setBorder(BorderFactory.createLineBorder(CasinoPanel.GOLD, 10))
-
-#   alphaPanel.setLayout(new GridLayout(1, 1))
-#   betaPanel.setLayout(new BoxLayout(betaPanel, BoxLayout.X_AXIS))
-
-#   alphaPanel.add(TableGameTitlePanel(CasinoExperienceType.RESTAURANT))
-
-#   for (key <- purchaseItemButtonMap.keys) {
-#     betaPanel.add(purchaseItemButtonMap(key))
-#   }
-#   add(alphaPanel)
-#   add(betaPanel)
-
-#   override def actionPerformed(ae: ActionEvent): Unit = {
-#     val button: CasinoButton = ae.getSource.asInstanceOf[CasinoButton]
-#     val connector = new AccountingServiceConnector()
-#     button match {
-#       case _: PurchaseItemButton =>
-#         val item = RestaurantItem.getItemByName(button.getText.substring("Purchase ".length))
-#         if (connector.getBillValue(restaurantSaveState.mainPatronSaveState, item.price) == 0.0) {
-#           restaurantSaveState = restaurantSaveState.passCasinoTime().updatePlayerStatus(item)
-#           restaurantSaveState.mainPatronSaveState = connector.setBills(restaurantSaveState.mainPatronSaveState, exactValue = item.price * -1)
-#         }
-#       case _ =>
-#     }
-#     parentLobbyPanel.updatePocketsPanel(restaurantSaveState)
-#     packParentFrame()
-#   }
-
-# }
-    
-#       private def setupRestaurantTitleLabel(): JLabel = {
-#     val fmt = NumberFormat.getCurrencyInstance()
-#     fmt.setMaximumFractionDigits(2)
-#     setupTitleLabel(RestaurantItem.itemList.map(item => item.name + ": " + fmt.format(item.price)).mkString(" / "), Font.ITALIC, 25)
-#   }
-
 @app.route('/feeling', methods=["GET"])
 def get_feeling():
     try:
@@ -206,21 +102,98 @@ def get_feeling():
 def subtract_hydration():
     try:
         payload = request.json
-        #subtract hydration here
-        return jsonify(True)
+        id = payload
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('SELECT hydration FROM players WHERE player_id = %s', (id,))
+        data = cursor.fetchone()
+        if data is not None:
+            newHydration = data[0] - 1
+            cursor.execute('UPDATE players SET hydration=%s WHERE player_id = %s', (newHydration, id,))
+            connection.commit()
+            cursor.close()
+            connection.close()
+            return jsonify(True)
+        else:
+            return jsonify({'error': 'Player not found'}), 404
     except Exception as e:
         print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500  
-    
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+@app.route('/purchaseItem', methods=["POST"])
+def purchase_item():
+    try:
+        payload = request.json
+        id = payload["id"]
+        itemName = payload["itemName"]
+        connection = psycopg2.connect(**db_params)
+        if itemName == 'burger':
+            cursor = connection.cursor()
+            cursor.execute('SELECT fullness FROM players WHERE player_id = %s', (id,))
+            data = cursor.fetchone()
+            if data is not None:
+                newValue = data[0] + 50
+                cursor.execute('UPDATE players SET fullness=%s WHERE player_id = %s', (newValue, id,))
+                connection.commit()
+                cursor.close()
+                connection.close()
+                socketio.emit('data_changed', namespace='/')
+                return jsonify(True)
+            else:
+                return jsonify({'error': 'Player not found'}), 404
+        if itemName == 'pizza':
+            cursor = connection.cursor()
+            cursor.execute('SELECT fullness FROM players WHERE player_id = %s', (id,))
+            data = cursor.fetchone()
+            if data is not None:
+                newValue = data[0] + 30
+                cursor.execute('UPDATE players SET fullness=%s WHERE player_id = %s', (newValue, id,))
+                connection.commit()
+                cursor.close()
+                connection.close()
+                socketio.emit('data_changed', namespace='/')
+                return jsonify(True)
+            else:
+                return jsonify({'error': 'Player not found'}), 404
+        if itemName == 'drink':
+            cursor = connection.cursor()
+            cursor.execute('SELECT hydration FROM players WHERE player_id = %s', (id,))
+            data = cursor.fetchone()
+            if data is not None:
+                newValue = data[0] + 20
+                cursor.execute('UPDATE players SET hydration=%s WHERE player_id = %s', (newValue, id,))
+                connection.commit()
+                cursor.close()
+                connection.close()
+                socketio.emit('data_changed', namespace='/')
+                return jsonify(True)
+            else:
+                return jsonify({'error': 'Player not found'}), 404
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
 @app.route('/fullness/subtract', methods=["POST"])
 def subtract_fullness():
     try:
         payload = request.json
-        #subtract fullness here
-        return jsonify(True)
+        id = payload
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('SELECT fullness FROM players WHERE player_id = %s', (id,))
+        data = cursor.fetchone()
+        if data is not None:
+            newFullness = data[0] - 1
+            cursor.execute('UPDATE players SET fullness=%s WHERE player_id = %s', (newFullness, id,))
+            connection.commit()
+            cursor.close()
+            connection.close()
+            return jsonify(True)
+        else:
+            return jsonify({'error': 'Player not found'}), 404
     except Exception as e:
         print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500  
+        return jsonify({'error': 'Internal Server Error'}), 500
 
 @app.route('/hydration', methods=["GET"])
 def get_hydration():
@@ -344,7 +317,6 @@ def get_resource():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid resource request"}), 400
 
-
 @app.route('/images/exchange', methods=['GET'])
 def exchange_filename():
     try:
@@ -358,7 +330,6 @@ def exchange_filename():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid bill value"}), 400
 
-
 @app.route('/doubles', methods=['GET'])
 def denomination_value_route():
     try:
@@ -368,14 +339,12 @@ def denomination_value_route():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid denomination name"}), 400
 
-
 def verify_keys(save_state):
     required_keys = ['playerBankAccountBalance']
     for key in required_keys:
         if key not in save_state:
             return jsonify({'error': f'save_state missing required key: {key}'}), 400
     return None
-
 
 @app.route('/saveState/bills', methods=['PUT'])
 def modify_bills():
@@ -401,7 +370,6 @@ def modify_bills():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for modifying bills"}), 400
 
-
 @app.route('/saveState/chips', methods=['PUT'])
 def modify_chips():
     try:
@@ -426,7 +394,6 @@ def modify_chips():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for modifying chips"}), 400
 
-
 @app.route('/saveState/bills/value', methods=['GET', 'POST'])
 def get_bill_value():
     try:
@@ -444,7 +411,6 @@ def get_bill_value():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting bill value"}), 400
 
-
 @app.route('/saveState/chips/value', methods=['GET', 'POST'])
 def get_save_state_chip_value():
     try:
@@ -453,7 +419,6 @@ def get_save_state_chip_value():
         return jsonify(chip_stack.get_stack_value())
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip value"}), 400
-
 
 @app.route('/chips/value', methods=['GET', 'POST'])
 def get_chip_stack_value():
@@ -464,7 +429,6 @@ def get_chip_stack_value():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip value"}), 400
 
-
 @app.route('/saveState/chips', methods=['GET', 'POST'])
 def get_count_of_chips():
     try:
@@ -474,7 +438,6 @@ def get_count_of_chips():
         return jsonify(chip_stack.count_type_of_item(chip_denom_param))
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip value"}), 400
-
 
 @app.route('/saveState/transactions', methods=['GET', 'POST'])
 def get_transactions():
@@ -488,7 +451,6 @@ def get_transactions():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/stack/multiply', methods=['GET', 'POST'])
 def multiply_stack():
     try:
@@ -500,11 +462,5 @@ def multiply_stack():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 if __name__ == '__main__':
     socketio.run(app, host='localhost', port=5000)
-
-
-
-
-
