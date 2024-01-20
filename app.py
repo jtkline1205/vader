@@ -127,41 +127,31 @@ def purchase_item():
         id = payload["id"]
         itemName = payload["itemName"]
         connection = psycopg2.connect(**db_params)
-        if itemName == 'burger':
-            cursor = connection.cursor()
-            cursor.execute('SELECT fullness FROM players WHERE player_id = %s', (id,))
-            data = cursor.fetchone()
-            if data is not None:
-                newValue = data[0] + 50
-                cursor.execute('UPDATE players SET fullness=%s WHERE player_id = %s', (newValue, id,))
-                connection.commit()
-                cursor.close()
-                connection.close()
-                socketio.emit('data_changed', namespace='/')
-                return jsonify(True)
-            else:
-                return jsonify({'error': 'Player not found'}), 404
+        attribute = "fullness"
+        itemStrength = 50
+        billQuantityRequired = 1
+        billDenominationRequired = "tens"
         if itemName == 'pizza':
-            cursor = connection.cursor()
-            cursor.execute('SELECT fullness FROM players WHERE player_id = %s', (id,))
-            data = cursor.fetchone()
-            if data is not None:
-                newValue = data[0] + 30
-                cursor.execute('UPDATE players SET fullness=%s WHERE player_id = %s', (newValue, id,))
-                connection.commit()
-                cursor.close()
-                connection.close()
-                socketio.emit('data_changed', namespace='/')
-                return jsonify(True)
-            else:
-                return jsonify({'error': 'Player not found'}), 404
+            itemStrength = 30
+            billDenominationRequired = "fives"
         if itemName == 'drink':
-            cursor = connection.cursor()
-            cursor.execute('SELECT hydration FROM players WHERE player_id = %s', (id,))
-            data = cursor.fetchone()
-            if data is not None:
-                newValue = data[0] + 20
-                cursor.execute('UPDATE players SET hydration=%s WHERE player_id = %s', (newValue, id,))
+            attribute = "hydration"
+            itemStrength = 20
+            billQuantityRequired = 2
+            billDenominationRequired = "ones"
+        cursor = connection.cursor()
+
+        cursor.execute('SELECT {} FROM wallets WHERE wallet_id = %s'.format(billDenominationRequired), (id,))
+        wallet_data = cursor.fetchone()
+
+        if (wallet_data[0] >= billQuantityRequired):
+            cursor.execute('SELECT {} FROM players WHERE player_id = %s'.format(attribute), (id,))
+            player_data = cursor.fetchone()
+            if player_data is not None:
+                newValue = player_data[0] + itemStrength
+                cursor.execute('UPDATE players SET {}=%s WHERE player_id = %s'.format(attribute), (newValue, id,))
+                newWalletValue = wallet_data[0] - billQuantityRequired
+                cursor.execute('UPDATE wallets SET {}=%s WHERE wallet_id = %s'.format(billDenominationRequired), (newWalletValue, id,))
                 connection.commit()
                 cursor.close()
                 connection.close()
@@ -169,6 +159,164 @@ def purchase_item():
                 return jsonify(True)
             else:
                 return jsonify({'error': 'Player not found'}), 404
+        else:
+            return jsonify(False)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+@app.route('/breakBill', methods=["POST"])
+def break_bill():
+    try:
+        payload = request.json
+        id = payload["id"]
+        denomination = payload["denomination"]
+        connection = psycopg2.connect(**db_params)
+        receivedBillType = "ones"
+        receivedBillQuantity = 5
+        givenBillType = "fives"
+        if denomination == 20:
+            receivedBillType = "fives"
+            givenBillType = "twenties"
+            receivedBillQuantity = 4
+        if denomination == 100:
+            receivedBillType = "twenties"
+            givenBillType = "hundreds"
+            receivedBillQuantity = 5
+        cursor = connection.cursor()
+
+        cursor.execute('SELECT {} FROM wallets WHERE wallet_id = %s'.format(givenBillType), (id,))
+        given_bill_data = cursor.fetchone()
+
+        if (given_bill_data[0] >= 1):
+            cursor.execute('SELECT {} FROM wallets WHERE wallet_id = %s'.format(receivedBillType), (id,))
+            received_bill_data = cursor.fetchone()
+            if received_bill_data is not None:
+                newReceivedBillQuantity = received_bill_data[0] + receivedBillQuantity
+                cursor.execute('UPDATE wallets SET {}=%s WHERE wallet_id = %s'.format(receivedBillType), (newReceivedBillQuantity, id,))
+                newGivenBillQuantity = given_bill_data[0] - 1
+                cursor.execute('UPDATE wallets SET {}=%s WHERE wallet_id = %s'.format(givenBillType), (newGivenBillQuantity, id,))
+                connection.commit()
+                cursor.close()
+                connection.close()
+                socketio.emit('data_changed', namespace='/')
+                return jsonify(True)
+            else:
+                return jsonify({'error': 'Player not found'}), 404
+        else:
+            return jsonify(False)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+@app.route('/exchangeCash', methods=["POST"])
+def exchange_cash():
+    try:
+        payload = request.json
+        id = payload["id"]
+        denomination = payload["denomination"]
+        connection = psycopg2.connect(**db_params)
+        receivedChipType = "chip_ones"
+        receivedChipQuantity = 1
+        givenBillType = "ones"
+        if denomination == 5:
+            receivedChipType = "chip_fives"
+            receivedChipQuantity = 1
+            givenBillType = "fives"
+        if denomination == 10:
+            receivedChipType = "chip_fives"
+            receivedChipQuantity = 2
+            givenBillType = "tens"
+        if denomination == 20:
+            receivedChipType = "chip_fives"
+            receivedChipQuantity = 4
+            givenBillType = "twenties"
+        if denomination == 50:
+            receivedChipType = "chip_twentyfives"
+            receivedChipQuantity = 2
+            givenBillType = "fifties"
+        if denomination == 100:
+            receivedChipType = "chip_hundreds"
+            receivedChipQuantity = 1
+            givenBillType = "hundreds"
+        cursor = connection.cursor()
+
+        cursor.execute('SELECT {} FROM wallets WHERE wallet_id = %s'.format(givenBillType), (id,))
+        given_bill_data = cursor.fetchone()
+
+        if (given_bill_data[0] >= 1):
+            cursor.execute('SELECT {} FROM wallets WHERE wallet_id = %s'.format(receivedChipType), (id,))
+            received_chip_data = cursor.fetchone()
+            if received_chip_data is not None:
+                newReceivedChipQuantity = received_chip_data[0] + receivedChipQuantity
+                cursor.execute('UPDATE wallets SET {}=%s WHERE wallet_id = %s'.format(receivedChipType), (newReceivedChipQuantity, id,))
+                newGivenBillQuantity = given_bill_data[0] - 1
+                cursor.execute('UPDATE wallets SET {}=%s WHERE wallet_id = %s'.format(givenBillType), (newGivenBillQuantity, id,))
+                connection.commit()
+                cursor.close()
+                connection.close()
+                socketio.emit('data_changed', namespace='/')
+                return jsonify(True)
+            else:
+                return jsonify({'error': 'Player not found'}), 404
+        else:
+            return jsonify(False)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+    
+@app.route('/exchangeChips', methods=["POST"])
+def exchange_chips():
+    try:
+        payload = request.json
+        id = payload["id"]
+        denomination = payload["denomination"]
+        connection = psycopg2.connect(**db_params)
+        receivedBillType = "ones"
+        givenChipQuantity = 1
+        givenChipType = "chip_ones"
+        if denomination == 5:
+            receivedBillType = "fives"
+            givenChipQuantity = 1
+            givenChipType = "chip_fives"
+        if denomination == 10:
+            receivedBillType = "tens"
+            givenChipQuantity = 2
+            givenChipType = "chip_fives"
+        if denomination == 20:
+            receivedBillType = "twenties"
+            givenChipQuantity = 4
+            givenChipType = "chip_fives"
+        if denomination == 50:
+            receivedBillType = "fifties"
+            givenChipQuantity = 2
+            givenChipType = "chip_twentyfives"
+        if denomination == 100:
+            receivedBillType = "hundreds"
+            givenChipQuantity = 1
+            givenChipType = "chip_hundreds"
+        cursor = connection.cursor()
+
+        cursor.execute('SELECT {} FROM wallets WHERE wallet_id = %s'.format(givenChipType), (id,))
+        given_chip_data = cursor.fetchone()
+
+        if (given_chip_data[0] >= givenChipQuantity):
+            cursor.execute('SELECT {} FROM wallets WHERE wallet_id = %s'.format(receivedBillType), (id,))
+            received_bill_data = cursor.fetchone()
+            if received_bill_data is not None:
+                newReceivedBillQuantity = received_bill_data[0] + 1
+                cursor.execute('UPDATE wallets SET {}=%s WHERE wallet_id = %s'.format(receivedBillType), (newReceivedBillQuantity, id,))
+                newGivenChipQuantity = given_chip_data[0] - givenChipQuantity
+                cursor.execute('UPDATE wallets SET {}=%s WHERE wallet_id = %s'.format(givenChipType), (newGivenChipQuantity, id,))
+                connection.commit()
+                cursor.close()
+                connection.close()
+                socketio.emit('data_changed', namespace='/')
+                return jsonify(True)
+            else:
+                return jsonify({'error': 'Player not found'}), 404
+        else:
+            return jsonify(False)
     except Exception as e:
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
