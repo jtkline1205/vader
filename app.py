@@ -51,35 +51,61 @@ def get_wallets():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-@app.route('/wallets', methods=['POST'])
-def post_wallets():
-    try:
-        payload = request.json
-        ones = payload.get('ONE', 0)
-        fives = payload.get('FIVE', 0)
-        tens = payload.get('TEN', 0)
-        twenties = payload.get('TWENTY', 0)
-        fifties = payload.get('FIFTY', 0)
-        hundreds = payload.get('HUNDRED', 0)
+# @app.route('/wallets', methods=['POST'])
+# def post_wallets():
+#     try:
+#         payload = request.json
+#         ones = payload.get('ONE', 0)
+#         fives = payload.get('FIVE', 0)
+#         tens = payload.get('TEN', 0)
+#         twenties = payload.get('TWENTY', 0)
+#         fifties = payload.get('FIFTY', 0)
+#         hundreds = payload.get('HUNDRED', 0)
 
-        connection = psycopg2.connect(**db_params)
-        cursor = connection.cursor()
-        cursor.execute('UPDATE wallets set ones = %s WHERE wallet_id = 1', (ones,))
-        cursor.execute('UPDATE wallets set fives = %s WHERE wallet_id = 1', (fives,))
-        cursor.execute('UPDATE wallets set tens = %s WHERE wallet_id = 1', (tens,))
-        cursor.execute('UPDATE wallets set twenties = %s WHERE wallet_id = 1', (twenties,))
-        cursor.execute('UPDATE wallets set fifties = %s WHERE wallet_id = 1', (fifties,))
-        cursor.execute('UPDATE wallets set hundreds = %s WHERE wallet_id = 1', (hundreds,))
+#         connection = psycopg2.connect(**db_params)
+#         cursor = connection.cursor()
+#         cursor.execute('UPDATE wallets set ones = %s WHERE wallet_id = 1', (ones,))
+#         cursor.execute('UPDATE wallets set fives = %s WHERE wallet_id = 1', (fives,))
+#         cursor.execute('UPDATE wallets set tens = %s WHERE wallet_id = 1', (tens,))
+#         cursor.execute('UPDATE wallets set twenties = %s WHERE wallet_id = 1', (twenties,))
+#         cursor.execute('UPDATE wallets set fifties = %s WHERE wallet_id = 1', (fifties,))
+#         cursor.execute('UPDATE wallets set hundreds = %s WHERE wallet_id = 1', (hundreds,))
 
-        connection.commit()
-        cursor.close()
-        connection.close()
-        # Notify clients about the data change
-        socketio.emit('data_changed', namespace='/')
+#         connection.commit()
+#         cursor.close()
+#         connection.close()
+#         # Notify clients about the data change
+#         socketio.emit('data_changed', namespace='/')
+#         return jsonify(True)
+#     except Exception as e:
+#         print('Error executing query:', e)
+#         return jsonify({'error': 'Internal Server Error'}), 500
+
+@app.route('/hasChips', methods=['GET'])
+def has_chips():
+    # id = request.args.get('id')
+    id = 1
+    denomination = request.args.get('denomination')
+    quantity = request.args.get('quantity')
+    connection = psycopg2.connect(**db_params)
+    cursor = connection.cursor()
+    column = "chip_ones"
+    if denomination == "TWO_FIFTY":
+        column = "chip_twofifties"
+    if denomination == "FIVE":
+        column = "chip_fives"
+    if denomination == "TWENTY_FIVE":
+        column = "chip_twentyfives"
+    if denomination == "HUNDRED":
+        column = "chip_hundreds"
+    cursor.execute('SELECT {} FROM wallets WHERE wallet_id = %s '.format(column), (id, ))
+    data = cursor.fetchone()
+    cursor.close()
+    connection.close()
+    if data[0] >= int(quantity):
         return jsonify(True)
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500
+    else:
+        return jsonify(False)
 
 @app.route('/feeling', methods=["GET"])
 def get_feeling():
@@ -380,34 +406,6 @@ def get_fullness():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500  
 
-@app.route('/playerChips', methods=['POST'])
-def post_player_chips():
-    try:
-        payload = request.json
-        chip_ones = payload.get('ONE', 0)
-        chip_twofifties = payload.get('TWO_FIFTY', 0)
-        chip_fives = payload.get('FIVE', 0)
-        chip_twentyfives = payload.get('TWENTY_FIVE', 0)
-        chip_hundreds = payload.get('HUNDRED', 0)
-
-        connection = psycopg2.connect(**db_params)
-        cursor = connection.cursor()
-        cursor.execute('UPDATE wallets set chip_ones = %s WHERE wallet_id = 1', (chip_ones,))
-        cursor.execute('UPDATE wallets set chip_twofifties = %s WHERE wallet_id = 1', (chip_twofifties,))
-        cursor.execute('UPDATE wallets set chip_fives = %s WHERE wallet_id = 1', (chip_fives,))
-        cursor.execute('UPDATE wallets set chip_twentyfives = %s WHERE wallet_id = 1', (chip_twentyfives,))
-        cursor.execute('UPDATE wallets set chip_hundreds = %s WHERE wallet_id = 1', (chip_hundreds,))
-
-        connection.commit()
-        cursor.close()
-        connection.close()
-        # Notify clients about the data change
-        socketio.emit('data_changed', namespace='/')
-        return jsonify(True)
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-
 @app.route('/playersClub', methods=['POST'])
 def post_players_club():
     try:
@@ -494,17 +492,31 @@ def verify_keys(save_state):
             return jsonify({'error': f'save_state missing required key: {key}'}), 400
     return None
 
-@app.route('/saveState/bills', methods=['PUT'])
+@app.route('/bills', methods=['PUT'])
 def modify_bills():
     try:
         double_param = float(request.args.get('exactValue', default=0.0))
         denomination_param = str(request.args.get('denomination', default=""))
         quantity = int(request.args.get('quantity', default=0))
-        save_state = request.get_json()
-        verify_result = verify_keys(save_state)
-        if verify_result is not None:
-            return verify_result
-        bill_stack = ItemStack(save_state['playerBills'])
+        connection = psycopg2.connect(**db_params)
+        id = 1
+        cursor = connection.cursor()
+        cursor.execute('SELECT ones FROM wallets WHERE wallet_id = %s', (id,))
+        ones_data = cursor.fetchone()
+        cursor.execute('SELECT fives FROM wallets WHERE wallet_id = %s', (id,))
+        fives_data = cursor.fetchone()
+        cursor.execute('SELECT tens FROM wallets WHERE wallet_id = %s', (id,))
+        tens_data = cursor.fetchone()
+        cursor.execute('SELECT twenties FROM wallets WHERE wallet_id = %s', (id,))
+        twenties_data = cursor.fetchone()
+        cursor.execute('SELECT fifties FROM wallets WHERE wallet_id = %s', (id,))
+        fifties_data = cursor.fetchone()
+        cursor.execute('SELECT hundreds FROM wallets WHERE wallet_id = %s', (id,))
+        hundreds_data = cursor.fetchone()
+        billMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TEN": tens_data[0], "TWENTY": twenties_data[0], "FIFTY": fifties_data[0], "HUNDRED": hundreds_data[0]}
+        bill_stack = ItemStack(billMap)
+        
+
         if double_param > 0:
             new_stack = ItemStack.generate_bill_stack_from_total(double_param)
             bill_stack = bill_stack.add_stack(new_stack)
@@ -513,22 +525,44 @@ def modify_bills():
             bill_stack = bill_stack.subtract_stack(stack_to_remove)
         else:
             bill_stack = bill_stack.modify_items(denomination_param, quantity)
-        save_state['playerBills'] = bill_stack.item_frequencies
-        return jsonify(save_state)
+
+        cursor.execute('UPDATE wallets SET ones=%s WHERE wallet_id = %s', (bill_stack.count_type_of_item("ONE"), id,))
+        cursor.execute('UPDATE wallets SET fives=%s WHERE wallet_id = %s', (bill_stack.count_type_of_item("FIVE"), id,))
+        cursor.execute('UPDATE wallets SET tens=%s WHERE wallet_id = %s', (bill_stack.count_type_of_item("TEN"), id,))
+        cursor.execute('UPDATE wallets SET twenties=%s WHERE wallet_id = %s', (bill_stack.count_type_of_item("TWENTY"), id,))
+        cursor.execute('UPDATE wallets SET fifties=%s WHERE wallet_id = %s', (bill_stack.count_type_of_item("FIFTY"), id,))
+        cursor.execute('UPDATE wallets SET hundreds=%s WHERE wallet_id = %s', (bill_stack.count_type_of_item("HUNDRED"), id,))
+        connection.commit()
+
+        cursor.close()
+        connection.close()
+        
+        return jsonify(True)
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for modifying bills"}), 400
 
-@app.route('/saveState/chips', methods=['PUT'])
+@app.route('/chips', methods=['PUT'])
 def modify_chips():
     try:
         double_param = float(request.args.get('exactValue', default=0.0))
         denomination_param = str(request.args.get('denomination', default=""))
         quantity = int(request.args.get('quantity', default=0))
-        save_state = request.get_json()
-        verify_result = verify_keys(save_state)
-        if verify_result is not None:
-            return verify_result
-        chip_stack = ItemStack(save_state['playerChips'])
+        id = 1
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('SELECT chip_ones FROM wallets WHERE wallet_id = %s', (id,))
+        ones_data = cursor.fetchone()
+        cursor.execute('SELECT chip_twofifties FROM wallets WHERE wallet_id = %s', (id,))
+        twofifties_data = cursor.fetchone()
+        cursor.execute('SELECT chip_fives FROM wallets WHERE wallet_id = %s', (id,))
+        fives_data = cursor.fetchone()
+        cursor.execute('SELECT chip_twentyfives FROM wallets WHERE wallet_id = %s', (id,))
+        twentyfives_data = cursor.fetchone()
+        cursor.execute('SELECT chip_hundreds FROM wallets WHERE wallet_id = %s', (id,))
+        hundreds_data = cursor.fetchone()
+        chipMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TWO_FIFTY": twofifties_data[0], "TWENTY_FIVE": twentyfives_data[0], "HUNDRED": hundreds_data[0]}
+        chip_stack = ItemStack(chipMap)
+        
         if double_param > 0:
             new_stack = ItemStack.generate_chip_stack_from_total(double_param)
             chip_stack = chip_stack.add_stack(new_stack)
@@ -537,17 +571,73 @@ def modify_chips():
             chip_stack = chip_stack.subtract_stack(stack_to_remove)
         else:
             chip_stack = chip_stack.modify_items(denomination_param, quantity)
-        save_state['playerChips'] = chip_stack.item_frequencies
-        return jsonify(save_state)
+
+        cursor.execute('UPDATE wallets SET chip_ones=%s WHERE wallet_id = %s', (chip_stack.count_type_of_item("ONE"), id,))
+        cursor.execute('UPDATE wallets SET chip_fives=%s WHERE wallet_id = %s', (chip_stack.count_type_of_item("FIVE"), id,))
+        cursor.execute('UPDATE wallets SET chip_twofifties=%s WHERE wallet_id = %s', (chip_stack.count_type_of_item("TWO_FIFTY"), id,))
+        cursor.execute('UPDATE wallets SET chip_twentyfives=%s WHERE wallet_id = %s', (chip_stack.count_type_of_item("TWENTY_FIVE"), id,))
+        cursor.execute('UPDATE wallets SET chip_hundreds=%s WHERE wallet_id = %s', (chip_stack.count_type_of_item("HUNDRED"), id,))
+        connection.commit()
+
+        cursor.close()
+        connection.close()
+
+        return jsonify(True)
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for modifying chips"}), 400
+
+@app.route('/clearBillsAndChips', methods=['PUT'])
+def clear_bills_and_chips():
+    try:
+        id = 1
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+
+        cursor.execute('UPDATE wallets SET chip_ones=0 WHERE wallet_id = %s', (id,))
+        cursor.execute('UPDATE wallets SET chip_fives=0 WHERE wallet_id = %s', (id,))
+        cursor.execute('UPDATE wallets SET chip_twofifties=0 WHERE wallet_id = %s', (id,))
+        cursor.execute('UPDATE wallets SET chip_twentyfives=0 WHERE wallet_id = %s', (id,))
+        cursor.execute('UPDATE wallets SET chip_hundreds=0 WHERE wallet_id = %s', (id,))
+
+        cursor.execute('UPDATE wallets SET ones=0 WHERE wallet_id = %s', (id,))
+        cursor.execute('UPDATE wallets SET fives=0 WHERE wallet_id = %s', (id,))
+        cursor.execute('UPDATE wallets SET tens=0 WHERE wallet_id = %s', (id,))
+        cursor.execute('UPDATE wallets SET twenties=0 WHERE wallet_id = %s', (id,))
+        cursor.execute('UPDATE wallets SET fifties=0 WHERE wallet_id = %s', (id,))
+        cursor.execute('UPDATE wallets SET hundreds=0 WHERE wallet_id = %s', (id,))
+
+        connection.commit()
+
+        cursor.close()
+        connection.close()
+
+        return jsonify(True)
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for clearing bills and chips"}), 400
 
 @app.route('/saveState/bills/value', methods=['GET', 'POST'])
 def get_bill_value():
     try:
+        connection = psycopg2.connect(**db_params)
+        id = 1
+        cursor = connection.cursor()
+        cursor.execute('SELECT ones FROM wallets WHERE wallet_id = %s', (id,))
+        ones_data = cursor.fetchone()
+        cursor.execute('SELECT fives FROM wallets WHERE wallet_id = %s', (id,))
+        fives_data = cursor.fetchone()
+        cursor.execute('SELECT tens FROM wallets WHERE wallet_id = %s', (id,))
+        tens_data = cursor.fetchone()
+        cursor.execute('SELECT twenties FROM wallets WHERE wallet_id = %s', (id,))
+        twenties_data = cursor.fetchone()
+        cursor.execute('SELECT fifties FROM wallets WHERE wallet_id = %s', (id,))
+        fifties_data = cursor.fetchone()
+        cursor.execute('SELECT hundreds FROM wallets WHERE wallet_id = %s', (id,))
+        hundreds_data = cursor.fetchone()
         cover_value_param = float(request.args.get('coverValue', default=0.0))
-        save_state = request.get_json()
-        bill_stack = ItemStack(save_state['playerBills'])
+        billMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TEN": tens_data[0], "TWENTY": twenties_data[0], "FIFTY": fifties_data[0], "HUNDRED": hundreds_data[0]}
+        bill_stack = ItemStack(billMap)
+        cursor.close()
+        connection.close()
         if cover_value_param > 0.0:
             found_stack = bill_stack.find_bill_combination(cover_value_param)
             if found_stack:
@@ -559,15 +649,6 @@ def get_bill_value():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting bill value"}), 400
 
-@app.route('/saveState/chips/value', methods=['GET', 'POST'])
-def get_save_state_chip_value():
-    try:
-        save_state = request.get_json()
-        chip_stack = ItemStack(save_state['playerChips'])
-        return jsonify(chip_stack.get_stack_value())
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for getting chip value"}), 400
-
 @app.route('/chips/value', methods=['GET', 'POST'])
 def get_chip_stack_value():
     try:
@@ -577,15 +658,29 @@ def get_chip_stack_value():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip value"}), 400
 
-@app.route('/saveState/chips', methods=['GET', 'POST'])
-def get_count_of_chips():
+@app.route('/chips/db/value', methods=['GET', 'POST'])
+def get_chip_db_value():
     try:
-        chip_denom_param = str(request.args.get('chipDenomination', default=""))
-        save_state = request.get_json()
-        chip_stack = ItemStack(save_state['playerChips'])
-        return jsonify(chip_stack.count_type_of_item(chip_denom_param))
+        connection = psycopg2.connect(**db_params)
+        id = 1
+        cursor = connection.cursor()
+        cursor.execute('SELECT chip_ones FROM wallets WHERE wallet_id = %s', (id,))
+        ones_data = cursor.fetchone()
+        cursor.execute('SELECT chip_twofifties FROM wallets WHERE wallet_id = %s', (id,))
+        twofifties_data = cursor.fetchone()
+        cursor.execute('SELECT chip_fives FROM wallets WHERE wallet_id = %s', (id,))
+        fives_data = cursor.fetchone()
+        cursor.execute('SELECT chip_twentyfives FROM wallets WHERE wallet_id = %s', (id,))
+        twentyfives_data = cursor.fetchone()
+        cursor.execute('SELECT chip_hundreds FROM wallets WHERE wallet_id = %s', (id,))
+        hundreds_data = cursor.fetchone()
+        chipMap = {"ONE": ones_data[0], "TWO_FIFTY": twofifties_data[0], "FIVE": fives_data[0], "TWENTY_FIVE": twentyfives_data[0], "HUNDRED": hundreds_data[0]}
+        chip_stack = ItemStack(chipMap)
+        cursor.close()
+        connection.close()
+        return jsonify(chip_stack.get_stack_value())
     except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for getting chip value"}), 400
+        return jsonify({"error": "Invalid request for getting chip db value"}), 400
 
 @app.route('/saveState/transactions', methods=['GET', 'POST'])
 def get_transactions():
