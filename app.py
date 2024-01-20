@@ -51,39 +51,8 @@ def get_wallets():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-# @app.route('/wallets', methods=['POST'])
-# def post_wallets():
-#     try:
-#         payload = request.json
-#         ones = payload.get('ONE', 0)
-#         fives = payload.get('FIVE', 0)
-#         tens = payload.get('TEN', 0)
-#         twenties = payload.get('TWENTY', 0)
-#         fifties = payload.get('FIFTY', 0)
-#         hundreds = payload.get('HUNDRED', 0)
-
-#         connection = psycopg2.connect(**db_params)
-#         cursor = connection.cursor()
-#         cursor.execute('UPDATE wallets set ones = %s WHERE wallet_id = 1', (ones,))
-#         cursor.execute('UPDATE wallets set fives = %s WHERE wallet_id = 1', (fives,))
-#         cursor.execute('UPDATE wallets set tens = %s WHERE wallet_id = 1', (tens,))
-#         cursor.execute('UPDATE wallets set twenties = %s WHERE wallet_id = 1', (twenties,))
-#         cursor.execute('UPDATE wallets set fifties = %s WHERE wallet_id = 1', (fifties,))
-#         cursor.execute('UPDATE wallets set hundreds = %s WHERE wallet_id = 1', (hundreds,))
-
-#         connection.commit()
-#         cursor.close()
-#         connection.close()
-#         # Notify clients about the data change
-#         socketio.emit('data_changed', namespace='/')
-#         return jsonify(True)
-#     except Exception as e:
-#         print('Error executing query:', e)
-#         return jsonify({'error': 'Internal Server Error'}), 500
-
 @app.route('/hasChips', methods=['GET'])
 def has_chips():
-    # id = request.args.get('id')
     id = 1
     denomination = request.args.get('denomination')
     quantity = request.args.get('quantity')
@@ -127,7 +96,7 @@ def get_feeling():
 @app.route('/hydration/subtract', methods=["POST"])
 def subtract_hydration():
     try:
-        payload = request.json
+        payload = request.json["playerId"]
         id = payload
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
@@ -350,7 +319,7 @@ def exchange_chips():
 @app.route('/fullness/subtract', methods=["POST"])
 def subtract_fullness():
     try:
-        payload = request.json
+        payload = request.json["playerId"]
         id = payload
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
@@ -409,7 +378,7 @@ def get_fullness():
 @app.route('/playersClub', methods=['POST'])
 def post_players_club():
     try:
-        payload = request.json
+        payload = request.json["inClub"]
 
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
@@ -428,7 +397,7 @@ def post_players_club():
 @app.route('/debitCardInWallet', methods=['POST'])
 def post_debit_card_in_wallet():
     try:
-        payload = request.json
+        payload = request.json["debitCardInWallet"]
 
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
@@ -484,13 +453,6 @@ def denomination_value_route():
         return jsonify({"value": resource_name})
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid denomination name"}), 400
-
-def verify_keys(save_state):
-    required_keys = ['playerBankAccountBalance']
-    for key in required_keys:
-        if key not in save_state:
-            return jsonify({'error': f'save_state missing required key: {key}'}), 400
-    return None
 
 @app.route('/bills', methods=['PUT'])
 def modify_bills():
@@ -615,7 +577,7 @@ def clear_bills_and_chips():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for clearing bills and chips"}), 400
 
-@app.route('/saveState/bills/value', methods=['GET', 'POST'])
+@app.route('/bills/value', methods=['GET', 'POST'])
 def get_bill_value():
     try:
         connection = psycopg2.connect(**db_params)
@@ -704,6 +666,13 @@ def multiply_stack():
         return jsonify(stack.item_frequencies)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def verify_keys(save_state):
+    required_keys = ['playerBankAccountBalance']
+    for key in required_keys:
+        if key not in save_state:
+            return jsonify({'error': f'save_state missing required key: {key}'}), 400
+    return None
 
 if __name__ == '__main__':
     socketio.run(app, host='localhost', port=5000)
