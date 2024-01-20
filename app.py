@@ -413,6 +413,23 @@ def post_debit_card_in_wallet():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
+@app.route('/debitCard', methods=['GET'])
+def debit_card():
+    try:
+        id = request.args.get('id')
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute('SELECT debit_card FROM wallets WHERE wallet_id = %s', (id,))
+        data = cursor.fetchall()
+        cursor.close()
+        connection.close()
+        # columns = [col[0] for col in cursor.description]
+        # result = [dict(zip(columns, row)) for row in data]
+        return jsonify(data[0][0])
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500  
+
 @app.route('/resource', methods=['GET'])
 def get_resource():
     try:
