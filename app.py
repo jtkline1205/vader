@@ -108,6 +108,7 @@ def subtract_hydration():
             connection.commit()
             cursor.close()
             connection.close()
+            socketio.emit('data_changed', namespace='/')
             return jsonify(True)
         else:
             return jsonify({'error': 'Player not found'}), 404
@@ -331,6 +332,7 @@ def subtract_fullness():
             connection.commit()
             cursor.close()
             connection.close()
+            socketio.emit('data_changed', namespace='/')
             return jsonify(True)
         else:
             return jsonify({'error': 'Player not found'}), 404
@@ -406,7 +408,6 @@ def post_debit_card_in_wallet():
         connection.commit()
         cursor.close()
         connection.close()
-        # Notify clients about the data change
         socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except Exception as e:
@@ -516,6 +517,7 @@ def modify_bills():
         cursor.close()
         connection.close()
         
+        socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for modifying bills"}), 400
@@ -561,6 +563,7 @@ def modify_chips():
         cursor.close()
         connection.close()
 
+        socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for modifying chips"}), 400
@@ -590,6 +593,7 @@ def clear_bills_and_chips():
         cursor.close()
         connection.close()
 
+        socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for clearing bills and chips"}), 400
