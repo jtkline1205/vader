@@ -398,7 +398,6 @@ def insert_or_remove_card():
             update_one_column("atms", "display_state", "'home'", "atm_id", "1")
             update_one_column("atms", "entry", "0", "atm_id", "1")
         else:
-            print("in else")
             update_one_column("wallets", "debit_card", True, "wallet_id", "1")
             update_one_column("atms", "display_state", "'insert'", "atm_id", "1")
         socketio.emit('data_changed', namespace='/')
@@ -458,13 +457,36 @@ def press_atm_control_button():
             elif display_state == "balance":
                 update_one_column("atms", "display_state", "'home'", "atm_id", id)
             elif display_state == "initiate":
-                # TODO check if entry is > 0
-                update_one_column("atms", "display_state", "'confirm'", "atm_id", id)
+                entry_data = fetch_one_column("entry", "atms", "atm_id", id)
+                entry = entry_data[0]
+                if entry > 0:
+                    update_one_column("atms", "display_state", "'confirm'", "atm_id", id)
             elif display_state == "confirm":
                 update_one_column("atms", "display_state", "'home'", "atm_id", id)
             elif display_state == "deposit":
-                # TODO deposit bills
-                update_one_column("atms", "display_state", "'home'", "atm_id", id)
+                entry_data = fetch_one_column("entry", "atms", "atm_id", id)
+                entry = entry_data[0]
+                ones_data = fetch_one_column("ones", "wallets", "wallet_id", id)
+                fives_data = fetch_one_column("fives", "wallets", "wallet_id", id)
+                tens_data = fetch_one_column("tens", "wallets", "wallet_id", id)
+                twenties_data = fetch_one_column("twenties", "wallets", "wallet_id", id)
+                fifties_data = fetch_one_column("fifties", "wallets", "wallet_id", id)
+                hundreds_data = fetch_one_column("hundreds", "wallets", "wallet_id", id)
+                billMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TEN": tens_data[0], "TWENTY": twenties_data[0], "FIFTY": fifties_data[0], "HUNDRED": hundreds_data[0]}
+                bill_stack = ItemStack(billMap)
+                stack_to_remove = bill_stack.find_bill_combination(int(entry))
+                if stack_to_remove is not None:
+                    bill_stack = bill_stack.subtract_stack(stack_to_remove)
+                    account_balance_data = fetch_one_column("account_balance", "players", "player_id", id)
+                    newAccountBalance = account_balance_data[0] + int(entry)
+                    update_one_column("wallets", "ones", bill_stack.count_type_of_item("ONE"), "wallet_id", id)
+                    update_one_column("wallets", "fives", bill_stack.count_type_of_item("FIVE"), "wallet_id", id)
+                    update_one_column("wallets", "tens", bill_stack.count_type_of_item("TEN"), "wallet_id", id)
+                    update_one_column("wallets", "twenties", bill_stack.count_type_of_item("TWENTY"), "wallet_id", id)
+                    update_one_column("wallets", "fifties", bill_stack.count_type_of_item("FIFTY"), "wallet_id", id)
+                    update_one_column("wallets", "hundreds", bill_stack.count_type_of_item("HUNDRED"), "wallet_id", id)
+                    update_one_column("players", "account_balance", newAccountBalance, "player_id", id)
+                    update_one_column("atms", "display_state", "'home'", "atm_id", id)
         socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except Exception as e:
@@ -632,6 +654,8 @@ def modify_chips():
         hundreds_data = fetch_one_column("chip_hundreds", "wallets", "wallet_id", id)
         chipMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TWO_FIFTY": twofifties_data[0], "TWENTY_FIVE": twentyfives_data[0], "HUNDRED": hundreds_data[0]}
         chip_stack = ItemStack(chipMap)
+        # print("starting chip_stack")
+        # print(chip_stack.item_frequencies)
         
         if double_param > 0:
             new_stack = ItemStack.generate_chip_stack_from_total(double_param)
@@ -641,6 +665,9 @@ def modify_chips():
             chip_stack = chip_stack.subtract_stack(stack_to_remove)
         else:
             chip_stack = chip_stack.modify_items(denomination_param, quantity)
+
+        # print("ending chip_stack")
+        # print(chip_stack.item_frequencies)
 
         update_one_column("wallets", "chip_ones", chip_stack.count_type_of_item("ONE"), "wallet_id", id)
         update_one_column("wallets", "chip_twofifties", chip_stack.count_type_of_item("TWO_FIFTY"), "wallet_id", id)
@@ -719,9 +746,7 @@ def get_chip_db_value():
         twentyfives_data = fetch_one_column("chip_twentyfives", "wallets", "wallet_id", id)
         hundreds_data = fetch_one_column("chip_hundreds", "wallets", "wallet_id", id)
         chipMap = {"ONE": ones_data[0], "TWO_FIFTY": twofifties_data[0], "FIVE": fives_data[0], "TWENTY_FIVE": twentyfives_data[0], "HUNDRED": hundreds_data[0]}
-        print(chipMap)
         chip_stack = ItemStack(chipMap)
-        print(str(chip_stack.get_stack_value()))
         return jsonify(chip_stack.get_stack_value())
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip db value"}), 400
