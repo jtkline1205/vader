@@ -459,7 +459,7 @@ def press_atm_control_button():
             elif display_state == "initiate":
                 entry_data = fetch_one_column("entry", "atms", "atm_id", id)
                 entry = entry_data[0]
-                if entry > 0:
+                if int(entry) > 0:
                     update_one_column("atms", "display_state", "'confirm'", "atm_id", id)
             elif display_state == "confirm":
                 update_one_column("atms", "display_state", "'home'", "atm_id", id)
@@ -511,17 +511,61 @@ def press_atm_word_button():
                 update_one_column("atms", "entry", "0", "atm_id", id)
         elif button_word == "enter":
             if display_state == "initiate":
-                # check entry is greater than 0
-                update_one_column("atms", "display_state", "'confirm'", "atm_id", id)
+                entry_data = fetch_one_column("entry", "atms", "atm_id", id)
+                entry = entry_data[0]
+                if int(entry) > 0:
+                    update_one_column("atms", "display_state", "'confirm'", "atm_id", id)
             elif display_state == "confirm":
-                # check entry + fee < bank balance
-                # withdraw bills and subtract amount + fee from bank balance
                 update_one_column("atms", "display_state", "'home'", "atm_id", id)
+                entry_data = fetch_one_column("entry", "atms", "atm_id", id)
+                entry = entry_data[0]
+                balance_data = fetch_one_column("account_balance", "players", "player_id", id)
+                balance = balance_data[0]
+                if int(entry) > 0 and int(entry) <= balance + 3:
+                    balance = balance - int(entry) - 3
+                    update_one_column("players", "account_balance", balance, "player_id", id)
+                    new_stack = ItemStack.generate_bill_stack_from_total(int(entry))
+                    ones_data = fetch_one_column("ones", "wallets", "wallet_id", id)
+                    fives_data = fetch_one_column("fives", "wallets", "wallet_id", id)
+                    tens_data = fetch_one_column("tens", "wallets", "wallet_id", id)
+                    twenties_data = fetch_one_column("twenties", "wallets", "wallet_id", id)
+                    fifties_data = fetch_one_column("fifties", "wallets", "wallet_id", id)
+                    hundreds_data = fetch_one_column("hundreds", "wallets", "wallet_id", id)
+                    billMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TEN": tens_data[0], "TWENTY": twenties_data[0], "FIFTY": fifties_data[0], "HUNDRED": hundreds_data[0]}
+                    bill_stack = ItemStack(billMap)
+                    bill_stack = bill_stack.add_stack(new_stack)
+                    update_one_column("wallets", "ones", bill_stack.count_type_of_item("ONE"), "wallet_id", id)
+                    update_one_column("wallets", "fives", bill_stack.count_type_of_item("FIVE"), "wallet_id", id)
+                    update_one_column("wallets", "tens", bill_stack.count_type_of_item("TEN"), "wallet_id", id)
+                    update_one_column("wallets", "twenties", bill_stack.count_type_of_item("TWENTY"), "wallet_id", id)
+                    update_one_column("wallets", "fifties", bill_stack.count_type_of_item("FIFTY"), "wallet_id", id)
+                    update_one_column("wallets", "hundreds", bill_stack.count_type_of_item("HUNDRED"), "wallet_id", id)
             elif display_state == "balance" or display_state == "activity":
                 update_one_column("atms", "display_state", "'home'", "atm_id", id)
             elif display_state == "deposit":
-                # deposit cash
-                update_one_column("atms", "display_state", "'home'", "atm_id", id)
+                entry_data = fetch_one_column("entry", "atms", "atm_id", id)
+                entry = entry_data[0]
+                ones_data = fetch_one_column("ones", "wallets", "wallet_id", id)
+                fives_data = fetch_one_column("fives", "wallets", "wallet_id", id)
+                tens_data = fetch_one_column("tens", "wallets", "wallet_id", id)
+                twenties_data = fetch_one_column("twenties", "wallets", "wallet_id", id)
+                fifties_data = fetch_one_column("fifties", "wallets", "wallet_id", id)
+                hundreds_data = fetch_one_column("hundreds", "wallets", "wallet_id", id)
+                billMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TEN": tens_data[0], "TWENTY": twenties_data[0], "FIFTY": fifties_data[0], "HUNDRED": hundreds_data[0]}
+                bill_stack = ItemStack(billMap)
+                stack_to_remove = bill_stack.find_bill_combination(int(entry))
+                if stack_to_remove is not None:
+                    bill_stack = bill_stack.subtract_stack(stack_to_remove)
+                    account_balance_data = fetch_one_column("account_balance", "players", "player_id", id)
+                    newAccountBalance = account_balance_data[0] + int(entry)
+                    update_one_column("wallets", "ones", bill_stack.count_type_of_item("ONE"), "wallet_id", id)
+                    update_one_column("wallets", "fives", bill_stack.count_type_of_item("FIVE"), "wallet_id", id)
+                    update_one_column("wallets", "tens", bill_stack.count_type_of_item("TEN"), "wallet_id", id)
+                    update_one_column("wallets", "twenties", bill_stack.count_type_of_item("TWENTY"), "wallet_id", id)
+                    update_one_column("wallets", "fifties", bill_stack.count_type_of_item("FIFTY"), "wallet_id", id)
+                    update_one_column("wallets", "hundreds", bill_stack.count_type_of_item("HUNDRED"), "wallet_id", id)
+                    update_one_column("players", "account_balance", newAccountBalance, "player_id", id)
+                    update_one_column("atms", "display_state", "'home'", "atm_id", id)
         socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except Exception as e:
