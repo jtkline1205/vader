@@ -3,71 +3,16 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from item_stack import ItemStack
 from resource_finder import ResourceFinder
+from postgres_connector import fetch_all, fetch_one_column, fetch_one, update_one, update_one_column
 
 import logging
-import psycopg2
 
 app = Flask(__name__)
 CORS(app, origins="http://localhost:3000")  # Allow connections from http://localhost:3000
 socketio = SocketIO(app, cors_allowed_origins="http://localhost:3000")
 
-db_params = {
-    'dbname': 'neptune-data',
-    'user': 'postgres',
-    'password': 'password',
-    'host': 'localhost',
-    'port': '5432',
-}
-
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)    
-
-def fetch_all(table_name, where_column, value_match):
-    connection = psycopg2.connect(**db_params)
-    cursor = connection.cursor()
-    cursor.execute('SELECT * FROM {} WHERE {} = {}'.format(table_name, where_column, value_match))
-    data = cursor.fetchall()
-    cursor.close()
-    connection.close()
-    columns = [col[0] for col in cursor.description]
-    result = [dict(zip(columns, row)) for row in data]
-    return result
-
-
-def fetch_one(query_string, id):
-    connection = psycopg2.connect(**db_params)
-    cursor = connection.cursor()
-    cursor.execute(query_string, (id, ))
-    result = cursor.fetchone()
-    cursor.close()
-    connection.close()
-    return result
-
-def fetch_one_column(column, table_name, where_column, value_match):
-    connection = psycopg2.connect(**db_params)
-    cursor = connection.cursor()
-    cursor.execute('SELECT {} FROM {} WHERE {} = {}'.format(column, table_name, where_column, value_match))
-    result = cursor.fetchone()
-    cursor.close()
-    connection.close()
-    return result
-
-def update_one(query_string, new_value, id):
-    connection = psycopg2.connect(**db_params)
-    cursor = connection.cursor()
-    cursor.execute(query_string, (new_value, id,))
-    connection.commit()
-    cursor.close()
-    connection.close()
-
-def update_one_column(table_name, column_to_set, new_value, where_column, value_match):
-    connection = psycopg2.connect(**db_params)
-    cursor = connection.cursor()
-    cursor.execute('UPDATE {} SET {}={} WHERE {} = {}'.format(table_name, column_to_set, new_value, where_column, value_match))
-    connection.commit()
-    cursor.close()
-    connection.close()
-
 
 @socketio.on('connect', namespace='/')
 def connect():
@@ -81,6 +26,17 @@ def disconnect():
 def handle_data_change():
     emit('data_changed', broadcast=True)
 
+def can_spend_bills(bill_denomination, quantity, wallet_id):
+    wallet_data = fetch_one_column(bill_denomination, "wallets", "wallet_id", wallet_id)
+    return wallet_data[0] >= quantity
+
+def spend_bills(bill_denomination, quantity, wallet_id):
+    wallet_data = fetch_one_column(bill_denomination, "wallets", "wallet_id", wallet_id)
+    new_wallet_value = wallet_data[0] - quantity
+    update_one_column("wallets", bill_denomination, new_wallet_value, "wallet_id", wallet_id)
+    socketio.emit('data_changed', namespace='/')
+
+#App.js
 @app.route('/wallets', methods=['GET'])
 def get_wallets():
     try:
@@ -91,7 +47,8 @@ def get_wallets():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-@app.route('/hasChips', methods=['GET'])
+#AccountingServiceConnector.scala
+@app.route('/chips', methods=['GET'])
 def has_chips():
     id = 1
     denomination = request.args.get('denomination')
@@ -111,40 +68,17 @@ def has_chips():
     else:
         return jsonify(False)
 
-@app.route('/feeling', methods=["GET"])
-def get_feeling():
-    try:
-        id = request.args.get('id')
-        data = fetch_one_column("feeling", "players" , "player_id", id)
-        return jsonify(data[0])
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500    
-
-@app.route('/hydration/subtract', methods=["POST"])
-def subtract_hydration():
-    try:
-        id = request.json["playerId"]
-        data = fetch_one_column("hydration", "players", "player_id", id)
-        if data is not None:
-            newHydration = data[0] - 1
-            update_one_column("players", "hydration", newHydration, "player_id", id)
-            socketio.emit('data_changed', namespace='/')
-            return jsonify(True)
-        else:
-            return jsonify({'error': 'Player not found'}), 404
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-@app.route('/purchaseItem', methods=["POST"])
+#PurchaseItemButton.js
+@app.route('/items', methods=["POST"])
 def purchase_item():
     try:
         payload = request.json
         id = payload["id"]
         itemName = payload["itemName"]
+
         attribute = "fullness"
         itemStrength = 50
+
         billQuantityRequired = 1
         billDenominationRequired = "tens"
         if itemName == 'pizza':
@@ -156,15 +90,12 @@ def purchase_item():
             billQuantityRequired = 2
             billDenominationRequired = "ones"
 
-        wallet_data = fetch_one_column(billDenominationRequired, "wallets", "wallet_id", id)
-        if (wallet_data[0] >= billQuantityRequired):
+        if (can_spend_bills(billDenominationRequired, billQuantityRequired, id)):
             player_data = fetch_one_column(attribute, "players", "player_id", id)
             if player_data is not None:
                 newValue = player_data[0] + itemStrength
                 update_one_column("players", attribute, newValue, "player_id", id)
-                newWalletValue = wallet_data[0] - billQuantityRequired
-                update_one_column("wallets", billDenominationRequired, newWalletValue, "wallet_id", id)
-                socketio.emit('data_changed', namespace='/')
+                spend_bills(billDenominationRequired, billQuantityRequired, id)
                 return jsonify(True)
             else:
                 return jsonify({'error': 'Player not found'}), 404
@@ -174,7 +105,8 @@ def purchase_item():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-@app.route('/breakBill', methods=["POST"])
+#BreakBillButton.js
+@app.route('/bills/break', methods=["POST"])
 def break_bill():
     try:
         payload = request.json
@@ -211,7 +143,8 @@ def break_bill():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-@app.route('/exchangeCash', methods=["POST"])
+#ExchangeCashButton.js
+@app.route('/bills/exchange', methods=["POST"])
 def exchange_cash():
     try:
         payload = request.json
@@ -259,7 +192,8 @@ def exchange_cash():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
     
-@app.route('/exchangeChips', methods=["POST"])
+#ExchangeChipsButton.js
+@app.route('/chips/exchange', methods=["POST"])
 def exchange_chips():
     try:
         payload = request.json
@@ -308,53 +242,19 @@ def exchange_chips():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-@app.route('/fullness/subtract', methods=["POST"])
-def subtract_fullness():
+#App.js
+@app.route('/players', methods=["GET"])
+def get_player():
     try:
-        payload = request.json["playerId"]
-        id = payload
-        data = fetch_one_column("fullness", "players", "player_id", id)
-        if data is not None:
-            newFullness = data[0] - 1
-            update_one_column("players", "fullness", newFullness, "player_id", id)
-            socketio.emit('data_changed', namespace='/')
-            return jsonify(True)
-        else:
-            return jsonify({'error': 'Player not found'}), 404
+        id = request.args.get('id')
+        quality = request.args.get('quality')
+        data = fetch_one_column(quality, "players", "player_id", id)
+        return jsonify(data[0])
     except Exception as e:
         print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500
+        return jsonify({'error': 'Internal Server Error'}), 500 
 
-@app.route('/hydration', methods=["GET"])
-def get_hydration():
-    try:
-        id = request.args.get('id')
-        data = fetch_one_column("hydration", "players", "player_id", id)
-        return jsonify(data[0])
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500  
-    
-@app.route('/fullness', methods=["GET"])
-def get_fullness():
-    try:
-        id = request.args.get('id')
-        data = fetch_one_column("fullness", "players", "player_id", id)
-        return jsonify(data[0])
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500  
-    
-@app.route('/balance', methods=["GET"])
-def get_balance():
-    try:
-        id = request.args.get('id')
-        data = fetch_one_column("account_balance", "players", "player_id", id)
-        return jsonify(data[0])
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500  
-
+#App.js
 @app.route('/atms', methods=["GET"])
 def get_atm():
     try:
@@ -364,30 +264,9 @@ def get_atm():
     except Exception as e:
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500  
-
-@app.route('/playersClub', methods=['POST'])
-def post_players_club():
-    try:
-        payload = request.json["inClub"]
-        update_one_column("wallets", "players_club", payload, "wallet_id", "1")
-        socketio.emit('data_changed', namespace='/')
-        return jsonify(True)
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-    
-@app.route('/debitCardInWallet', methods=['POST'])
-def post_debit_card_in_wallet():
-    try:
-        payload = request.json["debitCardInWallet"]
-        update_one_column("wallets", "debit_card", payload, "wallet_id", "1")
-        socketio.emit('data_changed', namespace='/')
-        return jsonify(True)
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-@app.route('/insertOrRemoveDebitCard', methods=['POST'])
+ 
+#InsertDebitCardButton.js
+@app.route('/plastics', methods=['POST'])
 def insert_or_remove_card():
     try:
         payload = request.json
@@ -406,7 +285,8 @@ def insert_or_remove_card():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500  
 
-@app.route('/pressATMControlButton', methods=['POST'])
+#ATMControlButton.js
+@app.route('/buttons/atm/control', methods=['POST'])
 def press_atm_control_button():
     try:
         payload = request.json
@@ -493,7 +373,8 @@ def press_atm_control_button():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500 
     
-@app.route('/pressATMWordButton', methods=['POST'])
+#ATMWordButton.js
+@app.route('/buttons/atm/word', methods=['POST'])
 def press_atm_word_button():
     try:
         payload = request.json
@@ -571,18 +452,9 @@ def press_atm_word_button():
     except Exception as e:
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500 
-    
-@app.route('/debitCard', methods=['GET'])
-def debit_card():
-    try:
-        id = request.args.get('id')
-        data = fetch_one_column("debit_card", "wallets", "wallet_id", id)
-        return jsonify(data[0])
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500  
 
-@app.route('/appendDigitToATM', methods=['POST'])
+#ATMDigitButton.js
+@app.route('/buttons/atm/digit', methods=['POST'])
 def append_atm_digit():
     try:
         payload = request.json
@@ -606,7 +478,8 @@ def append_atm_digit():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
-@app.route('/resource', methods=['GET'])
+#AccountingServiceConnector.scala
+@app.route('/resources', methods=['GET'])
 def get_resource():
     try:
         chip_value_for_color = float(request.args.get('chipColorValue', default=0.0))
@@ -625,19 +498,7 @@ def get_resource():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid resource request"}), 400
 
-@app.route('/images/exchange', methods=['GET'])
-def exchange_filename():
-    try:
-        bill_value_cash = float(request.args.get('billValue', default=0.0))
-        chip_value_cash = float(request.args.get('chipValue', default=0.0))
-        resource_finder = ResourceFinder()
-        if bill_value_cash > 0:
-            return jsonify({"filename": resource_finder.get_resource(bill_value_cash, "cash_exchange")})
-        else:
-            return jsonify({"filename": resource_finder.get_resource(chip_value_cash, "chip_exchange")})
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid bill value"}), 400
-
+#AccountingServiceConnector.scala
 @app.route('/doubles', methods=['GET'])
 def denomination_value_route():
     try:
@@ -647,43 +508,7 @@ def denomination_value_route():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid denomination name"}), 400
 
-@app.route('/bills', methods=['PUT'])
-def modify_bills():
-    try:
-        double_param = float(request.args.get('exactValue', default=0.0))
-        denomination_param = str(request.args.get('denomination', default=""))
-        quantity = int(request.args.get('quantity', default=0))
-        id = 1
-        ones_data = fetch_one_column("ones", "wallets", "wallet_id", id)
-        fives_data = fetch_one_column("fives", "wallets", "wallet_id", id)
-        tens_data = fetch_one_column("tens", "wallets", "wallet_id", id)
-        twenties_data = fetch_one_column("twenties", "wallets", "wallet_id", id)
-        fifties_data = fetch_one_column("fifties", "wallets", "wallet_id", id)
-        hundreds_data = fetch_one_column("hundreds", "wallets", "wallet_id", id)
-        billMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TEN": tens_data[0], "TWENTY": twenties_data[0], "FIFTY": fifties_data[0], "HUNDRED": hundreds_data[0]}
-        bill_stack = ItemStack(billMap)
-    
-        if double_param > 0:
-            new_stack = ItemStack.generate_bill_stack_from_total(double_param)
-            bill_stack = bill_stack.add_stack(new_stack)
-        elif double_param < 0:
-            stack_to_remove = bill_stack.find_bill_combination(double_param * -1)
-            bill_stack = bill_stack.subtract_stack(stack_to_remove)
-        else:
-            bill_stack = bill_stack.modify_items(denomination_param, quantity)
-
-        update_one_column("wallets", "ones", bill_stack.count_type_of_item("ONE"), "wallet_id", id)
-        update_one_column("wallets", "fives", bill_stack.count_type_of_item("FIVE"), "wallet_id", id)
-        update_one_column("wallets", "tens", bill_stack.count_type_of_item("TEN"), "wallet_id", id)
-        update_one_column("wallets", "twenties", bill_stack.count_type_of_item("TWENTY"), "wallet_id", id)
-        update_one_column("wallets", "fifties", bill_stack.count_type_of_item("FIFTY"), "wallet_id", id)
-        update_one_column("wallets", "hundreds", bill_stack.count_type_of_item("HUNDRED"), "wallet_id", id)
-        
-        socketio.emit('data_changed', namespace='/')
-        return jsonify(True)
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for modifying bills"}), 400
-
+#AccountingServiceConnector.scala
 @app.route('/chips', methods=['PUT'])
 def modify_chips():
     try:
@@ -718,22 +543,16 @@ def modify_chips():
         update_one_column("wallets", "chip_fives", chip_stack.count_type_of_item("FIVE"), "wallet_id", id)
         update_one_column("wallets", "chip_twentyfives", chip_stack.count_type_of_item("TWENTY_FIVE"), "wallet_id", id)
         update_one_column("wallets", "chip_hundreds", chip_stack.count_type_of_item("HUNDRED"), "wallet_id", id)
-
         socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for modifying chips"}), 400
 
-@app.route('/clearBillsAndChips', methods=['PUT'])
-def clear_bills_and_chips():
+#AccountingServiceConnector.scala
+@app.route('/bills/clear', methods=['PUT'])
+def clear_bills():
     try:
         id = 1
-
-        update_one_column("wallets", "chip_ones", "0", "wallet_id", id)
-        update_one_column("wallets", "chip_twofifties", "0", "wallet_id", id)
-        update_one_column("wallets", "chip_fives", "0", "wallet_id", id)
-        update_one_column("wallets", "chip_twentyfives", "0", "wallet_id", id)
-        update_one_column("wallets", "chip_hundreds", "0", "wallet_id", id)
 
         update_one_column("wallets", "ones", "0", "wallet_id", id)
         update_one_column("wallets", "fives", "0", "wallet_id", id)
@@ -745,8 +564,26 @@ def clear_bills_and_chips():
         socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for clearing bills and chips"}), 400
+        return jsonify({"error": "Invalid request for clearing bills"}), 400
 
+#AccountingServiceConnector.scala
+@app.route('/chips/clear', methods=['PUT'])
+def clear_chips():
+    try:
+        id = 1
+
+        update_one_column("wallets", "chip_ones", "0", "wallet_id", id)
+        update_one_column("wallets", "chip_twofifties", "0", "wallet_id", id)
+        update_one_column("wallets", "chip_fives", "0", "wallet_id", id)
+        update_one_column("wallets", "chip_twentyfives", "0", "wallet_id", id)
+        update_one_column("wallets", "chip_hundreds", "0", "wallet_id", id)
+
+        socketio.emit('data_changed', namespace='/')
+        return jsonify(True)
+    except (ValueError, KeyError):
+        return jsonify({"error": "Invalid request for clearing chips"}), 400
+
+#AccountingServiceConnector.scala
 @app.route('/bills/value', methods=['GET', 'POST'])
 def get_bill_value():
     try:
@@ -771,7 +608,8 @@ def get_bill_value():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting bill value"}), 400
 
-@app.route('/chips/value', methods=['GET', 'POST'])
+#AccountingServiceConnector.scala
+@app.route('/stacks/value', methods=['GET', 'POST'])
 def get_chip_stack_value():
     try:
         chip_freq_map = request.get_json()
@@ -780,6 +618,7 @@ def get_chip_stack_value():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip value"}), 400
 
+#AccountingServiceConnector.scala
 @app.route('/chips/db/value', methods=['GET', 'POST'])
 def get_chip_db_value():
     try:
@@ -795,7 +634,8 @@ def get_chip_db_value():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip db value"}), 400
 
-@app.route('/saveState/transactions', methods=['GET', 'POST'])
+#unused?
+@app.route('/transactions', methods=['GET', 'POST'])
 def get_transactions():
     try:
         k_param = int(request.args.get('k', default=0))
@@ -807,7 +647,8 @@ def get_transactions():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/stack/multiply', methods=['GET', 'POST'])
+#AccountingServiceConnector.scala
+@app.route('/stacks/multiply', methods=['GET', 'POST'])
 def multiply_stack():
     try:
         factor_param = float(request.args.get('factor', default=0.0))
