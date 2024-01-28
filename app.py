@@ -1,30 +1,21 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
+from socketio_instance import socketio
 from item_stack import ItemStack
 from resource_finder import ResourceFinder
+from routes.chip_routes import chip_bp
+from routes.bill_routes import bill_bp
 from postgres_connector import fetch_all, fetch_one_column, fetch_one, update_one, update_one_column
 
 import logging
 
 app = Flask(__name__)
+app.register_blueprint(chip_bp)
+app.register_blueprint(bill_bp)
+socketio.init_app(app)
 CORS(app, origins="http://localhost:3000")  # Allow connections from http://localhost:3000
-socketio = SocketIO(app, cors_allowed_origins="http://localhost:3000")
-
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)    
-
-@socketio.on('connect', namespace='/')
-def connect():
-    print('Client connected')
-
-@socketio.on('disconnect', namespace='/')
-def disconnect():
-    print('Client disconnected')
-
-@socketio.on('data_changed', namespace = '/')
-def handle_data_change():
-    emit('data_changed', broadcast=True)
 
 def can_spend_bills(bill_denomination, quantity, wallet_id):
     wallet_data = fetch_one_column(bill_denomination, "wallets", "wallet_id", wallet_id)
@@ -34,7 +25,6 @@ def spend_bills(bill_denomination, quantity, wallet_id):
     wallet_data = fetch_one_column(bill_denomination, "wallets", "wallet_id", wallet_id)
     new_wallet_value = wallet_data[0] - quantity
     update_one_column("wallets", bill_denomination, new_wallet_value, "wallet_id", wallet_id)
-    socketio.emit('data_changed', namespace='/')
 
 #App.js
 @app.route('/wallets', methods=['GET'])
@@ -46,27 +36,6 @@ def get_wallets():
     except Exception as e:
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
-
-#AccountingServiceConnector.scala
-@app.route('/chips', methods=['GET'])
-def has_chips():
-    id = 1
-    denomination = request.args.get('denomination')
-    quantity = request.args.get('quantity')
-    column = "chip_ones"
-    if denomination == "TWO_FIFTY":
-        column = "chip_twofifties"
-    if denomination == "FIVE":
-        column = "chip_fives"
-    if denomination == "TWENTY_FIVE":
-        column = "chip_twentyfives"
-    if denomination == "HUNDRED":
-        column = "chip_hundreds"
-    data = fetch_one_column(column, "wallets", "wallet_id", id)
-    if data[0] >= int(quantity):
-        return jsonify(True)
-    else:
-        return jsonify(False)
 
 #PurchaseItemButton.js
 @app.route('/items', methods=["POST"])
@@ -104,144 +73,7 @@ def purchase_item():
     except Exception as e:
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
-
-#BreakBillButton.js
-@app.route('/bills/break', methods=["POST"])
-def break_bill():
-    try:
-        payload = request.json
-        id = payload["id"]
-        denomination = payload["denomination"]
-        receivedBillType = "ones"
-        receivedBillQuantity = 5
-        givenBillType = "fives"
-        if denomination == 20:
-            receivedBillType = "fives"
-            givenBillType = "twenties"
-            receivedBillQuantity = 4
-        if denomination == 100:
-            receivedBillType = "twenties"
-            givenBillType = "hundreds"
-            receivedBillQuantity = 5
-
-        given_bill_data = fetch_one_column(givenBillType, "wallets", "wallet_id", id)
-
-        if (given_bill_data[0] >= 1):
-            received_bill_data = fetch_one_column(receivedBillType, "wallets", "wallet_id", id)
-            if received_bill_data is not None:
-                newReceivedBillQuantity = received_bill_data[0] + receivedBillQuantity
-                update_one_column("wallets", receivedBillType, newReceivedBillQuantity, "wallet_id", id)
-                newGivenBillQuantity = given_bill_data[0] - 1
-                update_one_column("wallets", givenBillType, newGivenBillQuantity, "wallet_id", id)
-                socketio.emit('data_changed', namespace='/')
-                return jsonify(True)
-            else:
-                return jsonify({'error': 'Player not found'}), 404
-        else:
-            return jsonify(False)
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-#ExchangeCashButton.js
-@app.route('/bills/exchange', methods=["POST"])
-def exchange_cash():
-    try:
-        payload = request.json
-        id = payload["id"]
-        denomination = payload["denomination"]
-        receivedChipType = "chip_ones"
-        receivedChipQuantity = 1
-        givenBillType = "ones"
-        if denomination == 5:
-            receivedChipType = "chip_fives"
-            receivedChipQuantity = 1
-            givenBillType = "fives"
-        if denomination == 10:
-            receivedChipType = "chip_fives"
-            receivedChipQuantity = 2
-            givenBillType = "tens"
-        if denomination == 20:
-            receivedChipType = "chip_fives"
-            receivedChipQuantity = 4
-            givenBillType = "twenties"
-        if denomination == 50:
-            receivedChipType = "chip_twentyfives"
-            receivedChipQuantity = 2
-            givenBillType = "fifties"
-        if denomination == 100:
-            receivedChipType = "chip_hundreds"
-            receivedChipQuantity = 1
-            givenBillType = "hundreds"
-
-        given_bill_data = fetch_one_column(givenBillType, "wallets", "wallet_id", id)
-        if (given_bill_data[0] >= 1):
-            received_chip_data = fetch_one_column(receivedChipType, "wallets", "wallet_id", id)
-            if received_chip_data is not None:
-                newReceivedChipQuantity = received_chip_data[0] + receivedChipQuantity
-                update_one_column("wallets", receivedChipType, newReceivedChipQuantity, "wallet_id", id)
-                newGivenBillQuantity = given_bill_data[0] - 1
-                update_one_column("wallets", givenBillType, newGivenBillQuantity, "wallet_id", id)
-                socketio.emit('data_changed', namespace='/')
-                return jsonify(True)
-            else:
-                return jsonify({'error': 'Player not found'}), 404
-        else:
-            return jsonify(False)
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-    
-#ExchangeChipsButton.js
-@app.route('/chips/exchange', methods=["POST"])
-def exchange_chips():
-    try:
-        payload = request.json
-        id = payload["id"]
-        denomination = payload["denomination"]
-        receivedBillType = "ones"
-        givenChipQuantity = 1
-        givenChipType = "chip_ones"
-        if denomination == 5:
-            receivedBillType = "fives"
-            givenChipQuantity = 1
-            givenChipType = "chip_fives"
-        if denomination == 10:
-            receivedBillType = "tens"
-            givenChipQuantity = 2
-            givenChipType = "chip_fives"
-        if denomination == 20:
-            receivedBillType = "twenties"
-            givenChipQuantity = 4
-            givenChipType = "chip_fives"
-        if denomination == 50:
-            receivedBillType = "fifties"
-            givenChipQuantity = 2
-            givenChipType = "chip_twentyfives"
-        if denomination == 100:
-            receivedBillType = "hundreds"
-            givenChipQuantity = 1
-            givenChipType = "chip_hundreds"
-
-        given_chip_data = fetch_one_column(givenChipType, "wallets", "wallet_id", id)
-
-        if (given_chip_data[0] >= givenChipQuantity):
-            received_bill_data = fetch_one_column(receivedBillType, "wallets", "wallet_id", id)
-            if received_bill_data is not None:
-                newReceivedBillQuantity = received_bill_data[0] + 1
-                update_one_column("wallets", receivedBillType, newReceivedBillQuantity, "wallet_id", id)
-                newGivenChipQuantity = given_chip_data[0] - givenChipQuantity
-                update_one_column("wallets", givenChipType, newGivenChipQuantity, "wallet_id", id)
-                socketio.emit('data_changed', namespace='/')
-                return jsonify(True)
-            else:
-                return jsonify({'error': 'Player not found'}), 404
-        else:
-            return jsonify(False)
-    except Exception as e:
-        print('Error executing query:', e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-
+   
 #App.js
 @app.route('/players', methods=["GET"])
 def get_player():
@@ -279,7 +111,6 @@ def insert_or_remove_card():
         else:
             update_one_column("wallets", "debit_card", True, "wallet_id", "1")
             update_one_column("atms", "display_state", "'insert'", "atm_id", "1")
-        socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except Exception as e:
         print('Error executing query:', e)
@@ -367,7 +198,6 @@ def press_atm_control_button():
                     update_one_column("wallets", "hundreds", bill_stack.count_type_of_item("HUNDRED"), "wallet_id", id)
                     update_one_column("players", "account_balance", newAccountBalance, "player_id", id)
                     update_one_column("atms", "display_state", "'home'", "atm_id", id)
-        socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except Exception as e:
         print('Error executing query:', e)
@@ -447,7 +277,6 @@ def press_atm_word_button():
                     update_one_column("wallets", "hundreds", bill_stack.count_type_of_item("HUNDRED"), "wallet_id", id)
                     update_one_column("players", "account_balance", newAccountBalance, "player_id", id)
                     update_one_column("atms", "display_state", "'home'", "atm_id", id)
-        socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except Exception as e:
         print('Error executing query:', e)
@@ -472,7 +301,6 @@ def append_atm_digit():
             elif (len(entry) < 9):
                 new_entry = entry + str(digit)
                 update_one_column("atms", "entry", new_entry, "atm_id", id)
-        socketio.emit('data_changed', namespace='/')
         return jsonify(True)
     except Exception as e:
         print('Error executing query:', e)
@@ -509,106 +337,6 @@ def denomination_value_route():
         return jsonify({"error": "Invalid denomination name"}), 400
 
 #AccountingServiceConnector.scala
-@app.route('/chips', methods=['PUT'])
-def modify_chips():
-    try:
-        double_param = float(request.args.get('exactValue', default=0.0))
-        denomination_param = str(request.args.get('denomination', default=""))
-        quantity = int(request.args.get('quantity', default=0))
-        id = 1
-        ones_data = fetch_one_column("chip_ones", "wallets", "wallet_id", id)
-        twofifties_data = fetch_one_column("chip_twofifties", "wallets", "wallet_id", id)
-        fives_data = fetch_one_column("chip_fives", "wallets", "wallet_id", id)
-        twentyfives_data = fetch_one_column("chip_twentyfives", "wallets", "wallet_id", id)
-        hundreds_data = fetch_one_column("chip_hundreds", "wallets", "wallet_id", id)
-        chipMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TWO_FIFTY": twofifties_data[0], "TWENTY_FIVE": twentyfives_data[0], "HUNDRED": hundreds_data[0]}
-        chip_stack = ItemStack(chipMap)
-        # print("starting chip_stack")
-        # print(chip_stack.item_frequencies)
-        
-        if double_param > 0:
-            new_stack = ItemStack.generate_chip_stack_from_total(double_param)
-            chip_stack = chip_stack.add_stack(new_stack)
-        elif double_param < 0:
-            stack_to_remove = chip_stack.find_chip_combination(double_param)
-            chip_stack = chip_stack.subtract_stack(stack_to_remove)
-        else:
-            chip_stack = chip_stack.modify_items(denomination_param, quantity)
-
-        # print("ending chip_stack")
-        # print(chip_stack.item_frequencies)
-
-        update_one_column("wallets", "chip_ones", chip_stack.count_type_of_item("ONE"), "wallet_id", id)
-        update_one_column("wallets", "chip_twofifties", chip_stack.count_type_of_item("TWO_FIFTY"), "wallet_id", id)
-        update_one_column("wallets", "chip_fives", chip_stack.count_type_of_item("FIVE"), "wallet_id", id)
-        update_one_column("wallets", "chip_twentyfives", chip_stack.count_type_of_item("TWENTY_FIVE"), "wallet_id", id)
-        update_one_column("wallets", "chip_hundreds", chip_stack.count_type_of_item("HUNDRED"), "wallet_id", id)
-        socketio.emit('data_changed', namespace='/')
-        return jsonify(True)
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for modifying chips"}), 400
-
-#AccountingServiceConnector.scala
-@app.route('/bills/clear', methods=['PUT'])
-def clear_bills():
-    try:
-        id = 1
-
-        update_one_column("wallets", "ones", "0", "wallet_id", id)
-        update_one_column("wallets", "fives", "0", "wallet_id", id)
-        update_one_column("wallets", "tens", "0", "wallet_id", id)
-        update_one_column("wallets", "twenties", "0", "wallet_id", id)
-        update_one_column("wallets", "fifties", "0", "wallet_id", id)
-        update_one_column("wallets", "hundreds", "0", "wallet_id", id)
-
-        socketio.emit('data_changed', namespace='/')
-        return jsonify(True)
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for clearing bills"}), 400
-
-#AccountingServiceConnector.scala
-@app.route('/chips/clear', methods=['PUT'])
-def clear_chips():
-    try:
-        id = 1
-
-        update_one_column("wallets", "chip_ones", "0", "wallet_id", id)
-        update_one_column("wallets", "chip_twofifties", "0", "wallet_id", id)
-        update_one_column("wallets", "chip_fives", "0", "wallet_id", id)
-        update_one_column("wallets", "chip_twentyfives", "0", "wallet_id", id)
-        update_one_column("wallets", "chip_hundreds", "0", "wallet_id", id)
-
-        socketio.emit('data_changed', namespace='/')
-        return jsonify(True)
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for clearing chips"}), 400
-
-#AccountingServiceConnector.scala
-@app.route('/bills/value', methods=['GET', 'POST'])
-def get_bill_value():
-    try:
-        id = 1
-        ones_data = fetch_one_column("ones", "wallets", "wallet_id", id)
-        fives_data = fetch_one_column("fives", "wallets", "wallet_id", id)
-        tens_data = fetch_one_column("tens", "wallets", "wallet_id", id)
-        twenties_data = fetch_one_column("twenties", "wallets", "wallet_id", id)
-        fifties_data = fetch_one_column("fifties", "wallets", "wallet_id", id)
-        hundreds_data = fetch_one_column("hundreds", "wallets", "wallet_id", id)
-        cover_value_param = float(request.args.get('coverValue', default=0.0))
-        billMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TEN": tens_data[0], "TWENTY": twenties_data[0], "FIFTY": fifties_data[0], "HUNDRED": hundreds_data[0]}
-        bill_stack = ItemStack(billMap)
-        if cover_value_param > 0.0:
-            found_stack = bill_stack.find_bill_combination(cover_value_param)
-            if found_stack:
-                return jsonify(0.0)
-            else:
-                return jsonify(1.0)
-        else:
-            return jsonify(bill_stack.get_stack_value())
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for getting bill value"}), 400
-
-#AccountingServiceConnector.scala
 @app.route('/stacks/value', methods=['GET', 'POST'])
 def get_chip_stack_value():
     try:
@@ -617,22 +345,6 @@ def get_chip_stack_value():
         return jsonify(stack.get_stack_value())
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip value"}), 400
-
-#AccountingServiceConnector.scala
-@app.route('/chips/db/value', methods=['GET', 'POST'])
-def get_chip_db_value():
-    try:
-        id = 1
-        ones_data = fetch_one_column("chip_ones", "wallets", "wallet_id", id)
-        twofifties_data = fetch_one_column("chip_twofifties", "wallets", "wallet_id", id)
-        fives_data = fetch_one_column("chip_fives", "wallets", "wallet_id", id)
-        twentyfives_data = fetch_one_column("chip_twentyfives", "wallets", "wallet_id", id)
-        hundreds_data = fetch_one_column("chip_hundreds", "wallets", "wallet_id", id)
-        chipMap = {"ONE": ones_data[0], "TWO_FIFTY": twofifties_data[0], "FIVE": fives_data[0], "TWENTY_FIVE": twentyfives_data[0], "HUNDRED": hundreds_data[0]}
-        chip_stack = ItemStack(chipMap)
-        return jsonify(chip_stack.get_stack_value())
-    except (ValueError, KeyError):
-        return jsonify({"error": "Invalid request for getting chip db value"}), 400
 
 #unused?
 @app.route('/transactions', methods=['GET', 'POST'])

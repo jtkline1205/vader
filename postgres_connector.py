@@ -1,4 +1,5 @@
 import psycopg2
+from socketio_instance import socketio
 
 db_params = {
     'dbname': 'neptune-data',
@@ -44,8 +45,7 @@ def update_one(query_string, new_value, id):
     connection.commit()
     cursor.close()
     connection.close()
-    # if socketio:
-    #     socketio.emit('data_changed', namespace='/')
+    socketio.emit('data_changed', namespace='/')
 
 
 def update_one_column(table_name, column_to_set, new_value, where_column, value_match):
@@ -55,6 +55,5 @@ def update_one_column(table_name, column_to_set, new_value, where_column, value_
     connection.commit()
     cursor.close()
     connection.close()
-    # if socketio:
-    #     socketio.emit('data_changed', namespace='/')
+    socketio.emit('data_changed', namespace='/')
 
