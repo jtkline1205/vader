@@ -1,5 +1,5 @@
 import unittest
-from resource_finder import ResourceFinder
+from app.services.resource_finder import ResourceFinder
 
 
 class TestResourceFinder(unittest.TestCase):

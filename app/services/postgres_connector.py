@@ -1,5 +1,5 @@
 import psycopg2
-from socketio_instance import socketio
+from app.socketio_instance import socketio
 
 db_params = {
     'dbname': 'neptune-data',

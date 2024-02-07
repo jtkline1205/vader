@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, jsonify, request
-from postgres_connector import fetch_all, fetch_one_column, fetch_one, update_one, update_one_column
-from item_stack import ItemStack
+from app.services.postgres_connector import fetch_all, fetch_one_column, fetch_one, update_one, update_one_column
+from app.services.item_stack import ItemStack
 
 chip_bp = Blueprint('chip', __name__)
 

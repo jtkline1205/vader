@@ -1,5 +1,5 @@
 import unittest
-from item_stack import ItemStack
+from app.services.item_stack import ItemStack
 
 
 class TestItemStack(unittest.TestCase):

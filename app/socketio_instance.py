@@ -1,6 +1,6 @@
 from flask_socketio import SocketIO, emit
 
-socketio = SocketIO(cors_allowed_origins="http://localhost:3000")
+socketio = SocketIO(cors_allowed_origins="http://192.168.1.203:3000")
 
 @socketio.on('connect', namespace='/')
 def connect():
