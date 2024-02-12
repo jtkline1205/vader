@@ -1,10 +1,9 @@
 from flask import Blueprint, render_template, jsonify, request
-from app.services.postgres_connector import fetch_all, fetch_one_column, fetch_one, update_one, update_one_column
+from app.services.postgres_connector import fetch_all, fetch_one_column, fetch_one, update_one, update_one_column, update_one_column_with_two_conditions
 from app.services.item_stack import ItemStack
 
 chip_bp = Blueprint('chip', __name__)
 
-#AccountingServiceConnector.scala
 @chip_bp.route('/chips', methods=['GET'])
 def has_chips():
     id = 1
@@ -25,7 +24,6 @@ def has_chips():
     else:
         return jsonify(False)
     
-#ExchangeChipsButton.js
 @chip_bp.route('/chips/exchange', methods=["POST"])
 def exchange_chips():
     try:
@@ -74,7 +72,34 @@ def exchange_chips():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
     
-#AccountingServiceConnector.scala
+@chip_bp.route('/chips/bet', methods=["POST"])
+def bet_chips():
+    try:
+        payload = request.json
+        id = payload["id"]
+        denomination = payload["denomination"]
+        game = '\'' + payload["game"] + '\''
+        if (denomination == 5):
+            update_one_column_with_two_conditions("bets", "chip_fives", 1, "player_id", 1, "game", game)
+        ones_data = fetch_one_column("chip_ones", "wallets", "wallet_id", id)
+        twofifties_data = fetch_one_column("chip_twofifties", "wallets", "wallet_id", id)
+        fives_data = fetch_one_column("chip_fives", "wallets", "wallet_id", id)
+        twentyfives_data = fetch_one_column("chip_twentyfives", "wallets", "wallet_id", id)
+        hundreds_data = fetch_one_column("chip_hundreds", "wallets", "wallet_id", id)
+        chipMap = {"ONE": ones_data[0], "FIVE": fives_data[0], "TWO_FIFTY": twofifties_data[0], "TWENTY_FIVE": twentyfives_data[0], "HUNDRED": hundreds_data[0]}
+        chip_stack = ItemStack(chipMap)
+        if (denomination == 5):
+            chip_stack = chip_stack.modify_items("FIVE", -1)
+        update_one_column("wallets", "chip_ones", chip_stack.count_type_of_item("ONE"), "wallet_id", id)
+        update_one_column("wallets", "chip_twofifties", chip_stack.count_type_of_item("TWO_FIFTY"), "wallet_id", id)
+        update_one_column("wallets", "chip_fives", chip_stack.count_type_of_item("FIVE"), "wallet_id", id)
+        update_one_column("wallets", "chip_twentyfives", chip_stack.count_type_of_item("TWENTY_FIVE"), "wallet_id", id)
+        update_one_column("wallets", "chip_hundreds", chip_stack.count_type_of_item("HUNDRED"), "wallet_id", id)
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
 @chip_bp.route('/chips', methods=['PUT'])
 def modify_chips():
     try:
@@ -108,7 +133,6 @@ def modify_chips():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for modifying chips"}), 400
     
-#AccountingServiceConnector.scala
 @chip_bp.route('/chips/clear', methods=['PUT'])
 def clear_chips():
     try:
@@ -124,7 +148,6 @@ def clear_chips():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for clearing chips"}), 400
 
-#AccountingServiceConnector.scala
 @chip_bp.route('/chips/db/value', methods=['GET', 'POST'])
 def get_chip_db_value():
     try:

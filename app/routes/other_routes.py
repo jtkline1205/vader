@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from app.services.postgres_connector import fetch_all, fetch_one_column, fetch_one, update_one, update_one_column
+from app.services.postgres_connector import fetch_all, fetch_one_column, fetch_one, update_one, update_one_column, update_one_column_with_two_conditions, fetch_all_with_two_conditions
 from app.services.item_stack import ItemStack
 from app.services.resource_finder import ResourceFinder
 
@@ -25,8 +25,131 @@ def get_wallets():
     except Exception as e:
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
+    
+@other_bp.route('/bets', methods=['GET'])
+def get_bets():
+    try:
+        id = request.args.get('id')
+        game = '\'' + request.args.get('game') + '\''
+        result = fetch_all_with_two_conditions("bets", "player_id", id, "game", game)
+        return jsonify(result)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+    
+@other_bp.route('/houses', methods=['GET'])
+def get_house():
+    try:
+        id = request.args.get('id')
+        result = fetch_all("houses", "house_id", id)
+        return jsonify(result)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+    
+@other_bp.route('/winnings', methods=['GET'])
+def get_winnings():
+    try:
+        id = request.args.get('id')
+        game = '\'' + request.args.get('game') + '\''
+        result = fetch_all_with_two_conditions("winnings", "player_id", id, "game", game)
+        return jsonify(result)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+    
+@other_bp.route('/winnings', methods=['PUT'])
+def put_winnings():
+    try:
+        id = request.args.get('id')
+        quantity = request.args.get('quantity')
+        game = '\'' + request.args.get('game') + '\''
+        update_one_column_with_two_conditions("winnings", "chip_fives", quantity, "player_id", id, "game", game)
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
 
-#PurchaseItemButton.js
+@other_bp.route('/slot/bets', methods=['GET'])
+def get_slot_bet():
+    try:
+        id = request.args.get('id')
+        result = fetch_one_column("chip_fives", "bets", "player_id", id)
+        return jsonify(result[0])
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+@other_bp.route('/bets/clear', methods=['PUT'])
+def clear_bet():
+    try:
+        id = request.args.get('id')
+        game = '\'' + request.args.get('game') + '\''
+        update_one_column_with_two_conditions("bets", "chip_fives", 0, "player_id", id, "game", game)
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+@other_bp.route('/slot/reels', methods=['GET'])
+def get_slot_reels():
+    try:
+        id = request.args.get('id')
+        result = fetch_all("slots", "slot_id", id)
+        return jsonify(result)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+    
+@other_bp.route('/slot/reels', methods=['PUT'])
+def set_slot_reels():
+    try:
+        id = request.args.get('id')
+        first = '\'' + request.args.get('first') + '\''
+        second = '\'' + request.args.get('second') + '\''
+        third = '\'' + request.args.get('third') + '\''
+        update_one_column("slots", "reel_1", first, "slot_id", id)
+        update_one_column("slots", "reel_2", second, "slot_id", id)
+        update_one_column("slots", "reel_3", third, "slot_id", id)
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+@other_bp.route('/dice/rolls', methods=['GET'])
+def get_dice_rolls():
+    try:
+        id = request.args.get('id')
+        result = fetch_all("craps", "craps_id", id)
+        return jsonify(result)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+    
+@other_bp.route('/dice/rolls', methods=['PUT'])
+def set_dice_rolls():
+    try:
+        id = request.args.get('id')
+        first = '\'' + request.args.get('first') + '\''
+        second = '\'' + request.args.get('second') + '\''
+        update_one_column("craps", "die_1", first, "craps_id", id)
+        update_one_column("craps", "die_2", second, "craps_id", id)
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+@other_bp.route('/house/chips', methods=['PUT'])
+def set_house_chips():
+    try:
+        id = request.args.get('id')
+        quantity = request.args.get('quantity')
+        update_one_column("houses", "chip_fives", quantity, "house_id", id)
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
 @other_bp.route('/items', methods=["POST"])
 def purchase_item():
     try:
@@ -63,7 +186,6 @@ def purchase_item():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500
    
-#App.js
 @other_bp.route('/players', methods=["GET"])
 def get_player():
     try:
@@ -74,8 +196,28 @@ def get_player():
     except Exception as e:
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500 
+    
+@other_bp.route('/players/locations', methods=["GET"])
+def get_player_location():
+    try:
+        id = request.args.get('id')
+        data = fetch_one_column("location", "players", "player_id", id)
+        return jsonify(data[0])
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500 
+    
+@other_bp.route('/players/locations', methods=["PUT"])
+def update_player_location():
+    try:
+        id = request.args.get('id')
+        name = '\'' + request.args.get('name') + '\''
+        update_one_column("players", "location", name, "player_id", id)
+        return jsonify(True)
+    except Exception as e:
+        print('Error executing query:', e)
+        return jsonify({'error': 'Internal Server Error'}), 500 
 
-#App.js
 @other_bp.route('/atms', methods=["GET"])
 def get_atm():
     try:
@@ -86,7 +228,6 @@ def get_atm():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500  
  
-#InsertDebitCardButton.js
 @other_bp.route('/plastics', methods=['POST'])
 def insert_or_remove_card():
     try:
@@ -105,7 +246,6 @@ def insert_or_remove_card():
         print('Error executing query:', e)
         return jsonify({'error': 'Internal Server Error'}), 500  
 
-#AccountingServiceConnector.scala
 @other_bp.route('/resources', methods=['GET'])
 def get_resource():
     try:
@@ -125,7 +265,6 @@ def get_resource():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid resource request"}), 400
 
-#AccountingServiceConnector.scala
 @other_bp.route('/doubles', methods=['GET'])
 def denomination_value_route():
     try:
@@ -135,7 +274,6 @@ def denomination_value_route():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid denomination name"}), 400
 
-#AccountingServiceConnector.scala
 @other_bp.route('/stacks/value', methods=['GET', 'POST'])
 def get_chip_stack_value():
     try:
@@ -145,7 +283,6 @@ def get_chip_stack_value():
     except (ValueError, KeyError):
         return jsonify({"error": "Invalid request for getting chip value"}), 400
 
-#unused?
 @other_bp.route('/transactions', methods=['GET', 'POST'])
 def get_transactions():
     try:
@@ -158,7 +295,6 @@ def get_transactions():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-#AccountingServiceConnector.scala
 @other_bp.route('/stacks/multiply', methods=['GET', 'POST'])
 def multiply_stack():
     try:
